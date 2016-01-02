@@ -147,6 +147,7 @@ proc receiveAll*[T](self: Stream[T], n: int): Future[seq[T]] =
   return completer.getFuture
 
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Future[Bottom] =
+  ## Read the stream and execute `function` for every incoming sequence of items.
   let completer = newCompleter[Bottom]()
 
   self.onRecvReady = proc() =
@@ -162,6 +163,14 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Futur
 
   let f: Future[Bottom] = completer.getFuture
   return f
+
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[Bottom] =
+  self.forEachChunk proc(x: ConstView[T]) =
+    function(x.copyAsSeq)
+
+proc forEachChunk*(self: Stream[byte], function: (proc(x: string))): Future[Bottom] =
+  self.forEachChunk proc(x: ConstView[byte]) =
+    function(x.copyAsString)
 
 proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[Bottom] =
   self.forEachChunk proc(x: ConstView[T]) =

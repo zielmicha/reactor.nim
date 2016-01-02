@@ -24,6 +24,10 @@ proc seqView*[T](s: var seq[T]): View[T] =
   result.data = addr s[0]
   result.size = s.len
 
+proc stringView*(s: var string): View[byte] =
+  result.data = addr s[0]
+  result.size = s.len
+
 converter viewToConstView*[T](v: View[T]): ConstView[T] =
   result.data = v.data
   result.size = v.size
@@ -69,6 +73,10 @@ proc copyTo*[T](src: SomeView[T], dst: View[T]) =
 proc copyAsSeq*[T](src: SomeView[T]): seq[T] =
   result = newSeq[T](src.len)
   src.copyTo(result.seqView)
+
+proc copyAsString*(src: SomeView[byte]): string =
+  result = newString(src.len)
+  src.copyTo(result.stringView)
 
 iterator items*[T](src: SomeView[T]): T =
   for i in 0..<src.len:

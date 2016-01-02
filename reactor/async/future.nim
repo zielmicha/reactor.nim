@@ -118,6 +118,20 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
       proc(data: RootRef, fut: Future[T]) =
         onSuccessOrError[T](f, onSuccess, onError)
 
+proc onError*(f: Future[Bottom], onError: (proc(t: ref Exception))) =
+  onSuccessOrError(f, nil, onError)
+
+proc ignoreResult*[T](f: Future[T]): Future[Bottom] =
+  let completer = newCompleter[Bottom]()
+
+  onSuccessOrError[T](f, onSuccess=nothing1[T],
+                      onError=proc(t: ref Exception) = completeError(completer, t))
+
+  return completer.getFuture
+
+converter ignoreVoidResult*(f: Future[void]): Future[Bottom] =
+  ignoreResult(f)
+
 proc thenNowImpl[T, R](f: Future[T], function: (proc(t:T):R)): auto =
   let completer = newCompleter[R]()
 

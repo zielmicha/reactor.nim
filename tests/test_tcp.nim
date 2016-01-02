@@ -2,8 +2,10 @@ import reactor/tcp, reactor/loop, reactor/async, reactor/util, reactor/ipaddress
 
 proc acceptConn(conn: TcpConnection) =
   echo "got connection"
-  conn.input.forEach(proc(x: byte) =
-    echo ":", x).ignore()
+  conn.input.forEachChunk(proc(x: seq[byte]) =
+                          var x = x
+                          echo ":", x
+                          discard conn.output.provideSome(x.seqView)).ignore()
 
 proc main(x: TcpServer) =
   x.incomingConnections.forEach(acceptConn).ignore()

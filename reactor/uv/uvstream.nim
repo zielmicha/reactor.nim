@@ -14,7 +14,7 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
 
   defer: dealloc(buf.base)
 
-  if nread == UV_ENOBUFS or self.inputProvider.freeBufferSize == buf.len:
+  if nread == UV_ENOBUFS or self.inputProvider.freeBufferSize == nread:
     checkZero "read_stop", uv_read_stop(stream)
     if nread == UV_ENOBUFS:
       return
@@ -40,7 +40,7 @@ proc recvStart(self: UvStream) =
 proc writeReady(self: UvStream)
 
 proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
-  let self = cast[UvStream](req)
+  let self = cast[UvStream](req.data)
 
   if status < 0:
     self.inputProvider.sendClose(uvError(status, "stream write"))
@@ -78,5 +78,11 @@ proc newUvStream*[T](stream: ptr uv_stream_t): T =
     self.recvStart()
 
   self.outputStream.onRecvReady = proc() = self.writeReady()
+
+  self.inputProvider.onRecvClose = proc(err: ref Exception) =
+    nil
+
+  self.outputStream.onSendClose = proc(err: ref Exception) =
+    nil
 
   return self
