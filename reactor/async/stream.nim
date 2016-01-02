@@ -146,23 +146,44 @@ proc receiveAll*[T](self: Stream[T], n: int): Future[seq[T]] =
 
   return completer.getFuture
 
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Future[Bottom] =
-  ## Read the stream and execute `function` for every incoming sequence of items.
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[int])): Future[Bottom] =
+  ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
   let completer = newCompleter[Bottom]()
 
-  self.onRecvReady = proc() =
+  var onRecvContinue: (proc(n: int))
+
+  var onRecvReady = proc() =
     while true: # FIXME: potentially infinite
       let chunk = self.peekMany()
       if chunk.len == 0:
         break
-      function(chunk)
-      self.discardItems(chunk.len)
+      let nitems = function(chunk)
+      if nitems.isCompleted:
+        self.discardItems(nitems.get)
+      else:
+        self.onRecvReady = nil
+        nitems.onSuccessOrError(
+          onSuccess=onRecvContinue,
+          onError=proc(exc: ref Exception) = self.recvClose(exc))
+        break
+
+  onRecvContinue = proc(n: int) =
+    self.discardItems(n)
+    self.onRecvReady = onRecvReady
+    onRecvReady()
+
+  self.onRecvReady = onRecvReady
 
   self.onSendClose = proc(exc: ref Exception) =
     completer.completeError(exc)
 
   let f: Future[Bottom] = completer.getFuture
   return f
+
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Future[Bottom] =
+  self.forEachChunk proc(x: ConstView[T]): Future[int] =
+    function(x)
+    return immediateFuture(x.len)
 
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[Bottom] =
   self.forEachChunk proc(x: ConstView[T]) =
@@ -171,6 +192,10 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[Bott
 proc forEachChunk*(self: Stream[byte], function: (proc(x: string))): Future[Bottom] =
   self.forEachChunk proc(x: ConstView[byte]) =
     function(x.copyAsString)
+
+proc forEachChunk*(self: Stream[byte], function: (proc(x: string): Future[void])): Future[Bottom] =
+  self.forEachChunk proc(x: ConstView[byte]): Future[int] =
+    function(x.copyAsString).then(proc(): int = x.len)
 
 proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[Bottom] =
   self.forEachChunk proc(x: ConstView[T]) =

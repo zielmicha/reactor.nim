@@ -2,7 +2,14 @@
 const debugFutures = not defined(release)
 
 type
-  FutureNil[T] = ref object
+  Future*[T] = object
+    case isImmediate: bool
+    of true:
+      value: T
+    of false:
+      completer: Completer[T]
+
+  Completer*[T] = ref object
     when debugFutures:
       stackTrace: string
 
@@ -16,27 +23,25 @@ type
         error: ref Exception
     of false:
       data: RootRef
-      callback: (proc(data: RootRef, future: Future[T]) {.closure.})
-
-  Future*[T] = FutureNil[T]
-
-  CompleterNil {.borrow: `.`.}[T] = distinct FutureNil[T]
-
-  Completer*[T] = CompleterNil[T]
+      callback: (proc(data: RootRef, future: Completer[T]) {.closure.})
 
   Bottom* = object
 
-proc makeInfo[T](c: Future[T]): string =
-  result = ""
-  if c.isFinished:
-    if c.consumed:
-      result &= "consumed "
-    if c.isSuccess:
-      result &= "completed with success"
-    else:
-      result &= "completed with error"
+proc makeInfo[T](f: Future[T]): string =
+  if f.isImmediate:
+    return "immediate"
   else:
-    result &= "unfinished"
+    let c = f.completer
+    result = ""
+    if c.isFinished:
+      if c.consumed:
+        result &= "consumed "
+      if c.isSuccess:
+        result &= "completed with success"
+      else:
+        result &= "completed with error"
+    else:
+      result &= "unfinished"
 
 proc `$`*[T](c: Future[T]): string =
   "Future " & makeInfo(c)
@@ -45,26 +50,24 @@ proc `$`*[T](c: Completer[T]): string =
   "Completer " & makeInfo(c.getFuture)
 
 proc getFuture*[T](c: Completer[T]): Future[T] =
-  (Future[T])(c)
+  result.isImmediate = false
+  result.completer = c
 
-proc destroyFuture[T](f: Future[T]) =
+proc destroyCompleter[T](f: Completer[T]) =
   if not f.consumed:
     echo "Destroyed unconsumed future"
     when debugFutures:
       echo f.stackTrace
 
 proc newCompleter*[T](): Completer[T] =
-  var fut: Future[T]
-  new(fut, destroyFuture[T])
-  result = Completer[T](fut)
-  result.getFuture.isFinished = false
+  new(result, destroyCompleter[T])
+  result.isFinished = false
   when debugFutures:
-    result.getFuture.stackTrace = getStackTrace()
+    result.stackTrace = getStackTrace()
 
 proc immediateFuture*[T](value: T): Future[T] =
-  let self = newCompleter[T]()
-  self.complete(value)
-  return self.getFuture
+  result.isImmediate = true
+  result.value = value
 
 proc immediateError*[T](value: string): Future[T] =
   let self = newCompleter[T]()
@@ -76,8 +79,17 @@ proc immediateError*[T](value: ref Exception): Future[T] =
   self.completeError(value)
   return self.getFuture
 
+proc isCompleted*(self: Future): bool =
+  return self.isImmediate or self.completer.isFinished
+
+proc get*[T](self: Future[T]): T =
+  if self.isImmediate:
+    return self.value
+  else:
+    assert self.completer.isFinished
+    return self.completer.result
+
 proc complete*[T](self: Completer[T], x: T) =
-  let self = self.getFuture
   assert (not self.isFinished)
   let data = self.data
   let callback = self.callback
@@ -91,7 +103,6 @@ proc complete*[T](self: Completer[T], x: T) =
     callback(data, self)
 
 proc completeError*[T](self: Completer[T], x: ref Exception) =
-  let self = self.getFuture
   assert (not self.isFinished)
   let data = self.data
   let callback = self.callback
@@ -104,18 +115,25 @@ proc completeError*[T](self: Completer[T], x: ref Exception) =
     callback(data, self)
 
 proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t:ref Exception))) =
-  if f.isFinished:
-    f.consumed = true
-    if f.isSuccess:
+  if f.isImmediate:
+    when T is void:
+      onSuccess()
+    else:
+      onSuccess(f.value)
+    return
+  let c = f.completer
+  if c.isFinished:
+    c.consumed = true
+    if c.isSuccess:
       when T is void:
         onSuccess()
       else:
-        onSuccess(f.result)
+        onSuccess(c.result)
     else:
-      onError(f.error)
+      onError(c.error)
   else:
-    f.callback =
-      proc(data: RootRef, fut: Future[T]) =
+    c.callback =
+      proc(data: RootRef, compl: Completer[T]) =
         onSuccessOrError[T](f, onSuccess, onError)
 
 proc onError*(f: Future[Bottom], onError: (proc(t: ref Exception))) =
@@ -137,10 +155,16 @@ proc thenNowImpl[T, R](f: Future[T], function: (proc(t:T):R)): auto =
 
   proc onSuccess(t: T) =
     when R is void:
-      function(t)
+      when T is void:
+        function()
+      else:
+        function(t)
       complete[R](completer)
     else:
-      complete[R](completer, function(t))
+      when T is void:
+        complete[R](completer, function())
+      else:
+        complete[R](completer, function(t))
 
   onSuccessOrError[T](f, onSuccess=onSuccess,
                       onError=proc(t: ref Exception) = completeError[R](completer, t))
@@ -169,9 +193,12 @@ proc declval[R](r: typedesc[R]): R =
 
 proc thenWrapper[T, R](f: Future[T], function: (proc(t:T):R)): auto =
   when R is Future:
-    return thenChainImpl[T, type(declval(R).result)](f, function)
+    return thenChainImpl[T, type(declval(R).value)](f, function)
   else:
     return thenNowImpl[T, R](f, function)
+
+proc then*[T](f: Future[void], function: (proc(): T)): auto =
+  return thenWrapper[void, T](f, function)
 
 proc then*[T](f: Future[T], function: (proc(t:T))): auto =
   return thenWrapper[T, void](f, function)
