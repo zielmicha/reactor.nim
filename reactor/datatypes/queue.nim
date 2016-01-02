@@ -36,7 +36,7 @@ proc pushBackMany*[T](queue: Queue[T], items: ConstView[T]) =
     let copySize = min(queue.chunkSize - tail.value.`end`, items.len - index)
 
     if copySize != 0:
-      tail.value.data.slice(tail.value.`end`).copyFrom(items.slice(index, copySize))
+      tail.value.data.seqView.slice(tail.value.`end`).copyFrom(items.slice(index, copySize))
       tail.value.`end` += copySize
       queue.size += copySize
       index += copySize
@@ -52,11 +52,11 @@ proc pushBack*[T](queue: Queue[T], item: T) =
 
 proc peekFrontMany*[T](queue: Queue[T]): ConstView[T] =
   if queue.list.head == nil:
-    return emptyView[T]()
+    return emptyView[T]().viewToConstView
 
   let head = queue.list.head
 
-  return seqView(head.value.data).slice(head.value.begin, head.value.`end` - head.value.begin)
+  return seqView(head.value.data).slice(head.value.begin, head.value.`end` - head.value.begin).viewToConstView
 
 proc popFront*[T](queue: Queue[T], count=1) =
   var count = count

@@ -7,13 +7,13 @@ export SockAddr_in, SockAddr, AddrInfo
 # TODO: we use SockAddr from posix, on Windows different version may be needed
 
 when defined(windows):
-  type uv_buf_t = object
-    len: culong
-    base: cstring
+  type uv_buf_t* = object
+    len*: culong
+    base*: pointer
 else:
-  type uv_buf_t = object
-    base: cstring
-    len: int
+  type uv_buf_t* = object
+    base*: pointer
+    len*: int
 
 type # TODO
   uv_os_sock_t = cint
@@ -52,8 +52,8 @@ type
   uv_loop_t* = pointer
   uv_handle_t* = object
     data*: pointer
-  uv_stream_t* = pointer
-  uv_tcp_t* = pointer
+  uv_stream_t* = uv_handle_t
+  uv_tcp_t* = uv_handle_t
   uv_udp_t* = pointer
   uv_pipe_t* = pointer
   uv_tty_t* = pointer
@@ -73,7 +73,7 @@ type
   uv_getaddrinfo_t* = uv_req_t
   uv_getnameinfo_t* = uv_req_t
   uv_shutdown_t* = pointer
-  uv_write_t* = pointer
+  uv_write_t* = uv_req_t
   uv_connect_t* = pointer
   uv_udp_send_t* = pointer
   uv_fs_t* = pointer

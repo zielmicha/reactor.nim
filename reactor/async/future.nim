@@ -1,25 +1,30 @@
-import reactor/util
 
 const debugFutures = not defined(release)
 
-type Future*[T] = ref object
-  when debugFutures:
-    stackTrace: string
-
-  case isFinished: bool
-  of true:
-    consumed: bool
-    case isSuccess: bool
-    of true:
-      result: T
-    of false:
-      error: ref Exception
-  of false:
-    data: RootRef
-    callback: (proc(data: RootRef, future: Future[T]) {.closure.})
-
 type
-  Completer* {.borrow: `.`.}[T] = distinct Future[T]
+  FutureNil[T] = ref object
+    when debugFutures:
+      stackTrace: string
+
+    case isFinished: bool
+    of true:
+      consumed: bool
+      case isSuccess: bool
+      of true:
+        result: T
+      of false:
+        error: ref Exception
+    of false:
+      data: RootRef
+      callback: (proc(data: RootRef, future: Future[T]) {.closure.})
+
+  Future*[T] = FutureNil[T]
+
+  CompleterNil {.borrow: `.`.}[T] = distinct FutureNil[T]
+
+  Completer*[T] = CompleterNil[T]
+
+  Bottom* = object
 
 proc makeInfo[T](c: Future[T]): string =
   result = ""
@@ -66,6 +71,11 @@ proc immediateError*[T](value: string): Future[T] =
   self.completeError(value)
   return self.getFuture
 
+proc immediateError*[T](value: ref Exception): Future[T] =
+  let self = newCompleter[T]()
+  self.completeError(value)
+  return self.getFuture
+
 proc complete*[T](self: Completer[T], x: T) =
   let self = self.getFuture
   assert (not self.isFinished)
@@ -108,7 +118,7 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
       proc(data: RootRef, fut: Future[T]) =
         onSuccessOrError[T](f, onSuccess, onError)
 
-proc thenImpl[T, R](f: Future[T], function: (proc(t:T):R)): Future[R] =
+proc thenNowImpl[T, R](f: Future[T], function: (proc(t:T):R)): auto =
   let completer = newCompleter[R]()
 
   proc onSuccess(t: T) =
@@ -123,17 +133,48 @@ proc thenImpl[T, R](f: Future[T], function: (proc(t:T):R)): Future[R] =
 
   return completer.getFuture
 
-proc then*[T](f: Future[T], function: (proc(t:T))): Future[void] =
-  return thenImpl[T, void](f, function)
+proc completeFrom*[T](c: Completer[T], f: Future[T]) =
+  onSuccessOrError[T](f,
+                      onSuccess=proc(t: T) = complete[T](c, t),
+                      onError=proc(t: ref Exception) = completeError[T](c, t))
 
-proc then*[T, R](f: Future[T], function: (proc(t:T): R)): Future[R] =
-  return thenImpl[T, R](f, function)
+proc thenChainImpl[T, R](f: Future[T], function: (proc(t:T): Future[R])): Future[R] =
+  let completer = newCompleter[R]()
+
+  proc onSuccess(t: T) =
+    var newFut = function(t)
+    completeFrom[R](completer, newFut)
+
+  onSuccessOrError[T](f, onSuccess=onSuccess,
+                      onError=proc(t: ref Exception) = completeError[R](completer, t))
+
+  return completer.getFuture
+
+proc declval[R](r: typedesc[R]): R =
+  raise newException(Exception, "executing declval")
+
+proc thenWrapper[T, R](f: Future[T], function: (proc(t:T):R)): auto =
+  when R is Future:
+    return thenChainImpl[T, type(declval(R).result)](f, function)
+  else:
+    return thenNowImpl[T, R](f, function)
+
+proc then*[T](f: Future[T], function: (proc(t:T))): auto =
+  return thenWrapper[T, void](f, function)
+
+proc then*[T, R](f: Future[T], function: (proc(t:T): R)): auto =
+  return thenWrapper[T, R](f, function)
+
+proc ignoreFailCb(t: ref Exception) =
+  echo "Error in ignored future: " & t.msg
 
 proc ignore*(f: Future[void]) =
-  onSuccessOrError[void](f, proc(t: void) = discard, nothing1[ref Exception])
+  onSuccessOrError[void](f,
+                         proc(t: void) = discard,
+                         ignoreFailCb)
 
 proc ignore*[T](f: Future[T]) =
-  f.onSuccessOrError(nothing1[T], nothing1[ref Exception])
+  f.onSuccessOrError(nothing1[T], ignoreFailCb)
 
 proc completeError*(self: Completer, x: string) =
   self.completeError(newException(Exception, x))

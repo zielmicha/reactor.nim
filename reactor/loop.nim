@@ -34,6 +34,9 @@ proc enable*(self: LoopExecutor) =
   self.enabled = true
   checkZero "idle_start", uv_idle_start(self.uvIdler, uvCallback)
 
+proc enable*(self: LoopExecutorWithArg) =
+  self.executor.enable()
+
 proc newLoopExecutor*(): LoopExecutor =
   new(result)
   result.callback = nothing
@@ -44,12 +47,13 @@ proc newLoopExecutor*(): LoopExecutor =
   checkZero "idle_init", uv_idle_init(getThreadUvLoop(), result.uvIdler)
 
 proc newLoopExecutorWithArg*[T](): LoopExecutorWithArg[T] =
-  new(result)
-  result.executor = newLoopExecutor()
-  result.callback = proc(t: T) = return
-  proc callback() = result.callback(result.arg)
+  let self = new(LoopExecutorWithArg[T])
+  self.executor = newLoopExecutor()
+  self.callback = proc(t: T) = return
+  proc callback() = self.callback(self.arg)
 
-  result.executor.callback = callback
+  self.executor.callback = callback
+  return self
 
 proc runLoop*() =
   let loop = getThreadUvLoop()

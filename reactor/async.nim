@@ -1,5 +1,11 @@
-include reactor/async/future
-export Future, Completer, getFuture, newCompleter, then, onSuccessOrError
+import reactor/util
+import reactor/datatypes/queue
+import reactor/datatypes/basic
+import reactor/loop
 
+include reactor/async/future
 include reactor/async/stream
-export Stream, Provider, provide, provideSome, provideAll, peekMany, discardItems, receive, receiveMany
+
+import reactor/datatypes/basic
+export ConstView, View, ByteView, viewToConstView, seqView, basic.len
+export singleItemView
