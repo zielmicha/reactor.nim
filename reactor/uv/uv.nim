@@ -38,7 +38,29 @@ type
   uv_key_t = pointer
   uv_thread_t = pointer
 
-type 
+type
+  uv_fs_type* = enum
+    UV_FS_UNKNOWN = - 1, UV_FS_CUSTOM, UV_FS_OPEN, UV_FS_CLOSE, UV_FS_READ,
+    UV_FS_WRITE, UV_FS_SENDFILE, UV_FS_STAT, UV_FS_LSTAT, UV_FS_FSTAT,
+    UV_FS_FTRUNCATE, UV_FS_UTIME, UV_FS_FUTIME, UV_FS_ACCESS, UV_FS_CHMOD,
+    UV_FS_FCHMOD, UV_FS_FSYNC, UV_FS_FDATASYNC, UV_FS_UNLINK, UV_FS_RMDIR,
+    UV_FS_MKDIR, UV_FS_MKDTEMP, UV_FS_RENAME, UV_FS_SCANDIR, UV_FS_LINK,
+    UV_FS_SYMLINK, UV_FS_READLINK, UV_FS_CHOWN, UV_FS_FCHOWN, UV_FS_REALPATH
+
+type
+  uv_fs_s* = object
+    data*: pointer
+    `type`*: uv_req_type
+    active_queue*: array[2, pointer]
+    reserved*: array[4, pointer]
+    fs_type*: uv_fs_type
+    loop*: ptr uv_loop_t
+    cb*: uv_fs_cb
+    result*: int
+    `ptr`*: pointer
+    path*: cstring
+    statbuf*: uv_stat_t
+
   uv_errno_t* = cint
 
   uv_handle_type* = enum
@@ -76,7 +98,7 @@ type
   uv_write_t* = uv_req_t
   uv_connect_t* = uv_req_t
   uv_udp_send_t* = uv_req_t
-  uv_fs_t* = pointer
+  uv_fs_t* = uv_fs_s
   uv_work_t* = pointer
   uv_cpu_info_t* = pointer
   uv_interface_address_t* = pointer
@@ -86,37 +108,6 @@ type
   uv_run_mode* = enum 
     UV_RUN_DEFAULT = 0, UV_RUN_ONCE, UV_RUN_NOWAIT
 
-
-proc uv_version*(): cuint {.importc.}
-proc uv_version_string*(): cstring {.importc.}
-type 
-  uv_malloc_func* = proc (size: csize): pointer {.cdecl.}
-  uv_realloc_func* = proc (`ptr`: pointer; size: csize): pointer {.cdecl.}
-  uv_calloc_func* = proc (count: csize; size: csize): pointer {.cdecl.}
-  uv_free_func* = proc (`ptr`: pointer) {.cdecl.}
-
-proc uv_replace_allocator*(malloc_func: uv_malloc_func; 
-                           realloc_func: uv_realloc_func; 
-                           calloc_func: uv_calloc_func; free_func: uv_free_func): cint {.importc.}
-proc uv_default_loop*(): ptr uv_loop_t {.importc.}
-proc uv_loop_init*(loop: ptr uv_loop_t): cint {.importc.}
-proc uv_loop_close*(loop: ptr uv_loop_t): cint {.importc.}
-proc uv_loop_new*(): ptr uv_loop_t {.importc.}
-proc uv_loop_delete*(a2: ptr uv_loop_t) {.importc.}
-proc uv_loop_size*(): csize {.importc.}
-proc uv_loop_alive*(loop: ptr uv_loop_t): cint {.importc.}
-proc uv_loop_configure*(loop: ptr uv_loop_t; option: uv_loop_option): cint {.varargs, importc.}
-proc uv_run*(a2: ptr uv_loop_t; mode: uv_run_mode): cint {.importc.}
-proc uv_stop*(a2: ptr uv_loop_t) {.importc.}
-proc uv_ref*(a2: ptr uv_handle_t) {.importc.}
-proc uv_unref*(a2: ptr uv_handle_t) {.importc.}
-proc uv_has_ref*(a2: ptr uv_handle_t): cint {.importc.}
-proc uv_update_time*(a2: ptr uv_loop_t) {.importc.}
-proc uv_now*(a2: ptr uv_loop_t): uint64 {.importc.}
-proc uv_backend_fd*(a2: ptr uv_loop_t): cint {.importc.}
-proc uv_backend_timeout*(a2: ptr uv_loop_t): cint {.importc.}
-
-type 
   uv_alloc_cb* = proc (handle: ptr uv_handle_t; suggested_size: csize;
                        buf: ptr uv_buf_t) {.cdecl.}
   uv_read_cb* = proc (stream: ptr uv_stream_t; nread: int; buf: ptr uv_buf_t) {.cdecl.}
@@ -170,6 +161,35 @@ type
   uv_signal_cb* = proc (handle: ptr uv_signal_t; signum: cint) {.cdecl.}
   uv_membership* = enum 
     UV_LEAVE_GROUP = 0, UV_JOIN_GROUP
+
+proc uv_version*(): cuint {.importc.}
+proc uv_version_string*(): cstring {.importc.}
+type
+  uv_malloc_func* = proc (size: csize): pointer {.cdecl.}
+  uv_realloc_func* = proc (`ptr`: pointer; size: csize): pointer {.cdecl.}
+  uv_calloc_func* = proc (count: csize; size: csize): pointer {.cdecl.}
+  uv_free_func* = proc (`ptr`: pointer) {.cdecl.}
+
+proc uv_replace_allocator*(malloc_func: uv_malloc_func;
+                           realloc_func: uv_realloc_func;
+                           calloc_func: uv_calloc_func; free_func: uv_free_func): cint {.importc.}
+proc uv_default_loop*(): ptr uv_loop_t {.importc.}
+proc uv_loop_init*(loop: ptr uv_loop_t): cint {.importc.}
+proc uv_loop_close*(loop: ptr uv_loop_t): cint {.importc.}
+proc uv_loop_new*(): ptr uv_loop_t {.importc.}
+proc uv_loop_delete*(a2: ptr uv_loop_t) {.importc.}
+proc uv_loop_size*(): csize {.importc.}
+proc uv_loop_alive*(loop: ptr uv_loop_t): cint {.importc.}
+proc uv_loop_configure*(loop: ptr uv_loop_t; option: uv_loop_option): cint {.varargs, importc.}
+proc uv_run*(a2: ptr uv_loop_t; mode: uv_run_mode): cint {.importc.}
+proc uv_stop*(a2: ptr uv_loop_t) {.importc.}
+proc uv_ref*(a2: ptr uv_handle_t) {.importc.}
+proc uv_unref*(a2: ptr uv_handle_t) {.importc.}
+proc uv_has_ref*(a2: ptr uv_handle_t): cint {.importc.}
+proc uv_update_time*(a2: ptr uv_loop_t) {.importc.}
+proc uv_now*(a2: ptr uv_loop_t): uint64 {.importc.}
+proc uv_backend_fd*(a2: ptr uv_loop_t): cint {.importc.}
+proc uv_backend_timeout*(a2: ptr uv_loop_t): cint {.importc.}
 
 
 proc uv_strerror*(err: cint): cstring {.importc.}
@@ -694,30 +714,6 @@ proc uv_interface_addresses*(addresses: ptr ptr uv_interface_address_t;
                              count: ptr cint): cint {.importc.}
 proc uv_free_interface_addresses*(addresses: ptr uv_interface_address_t; 
                                   count: cint) {.importc.}
-type 
-  uv_fs_type* = enum 
-    UV_FS_UNKNOWN = - 1, UV_FS_CUSTOM, UV_FS_OPEN, UV_FS_CLOSE, UV_FS_READ, 
-    UV_FS_WRITE, UV_FS_SENDFILE, UV_FS_STAT, UV_FS_LSTAT, UV_FS_FSTAT, 
-    UV_FS_FTRUNCATE, UV_FS_UTIME, UV_FS_FUTIME, UV_FS_ACCESS, UV_FS_CHMOD, 
-    UV_FS_FCHMOD, UV_FS_FSYNC, UV_FS_FDATASYNC, UV_FS_UNLINK, UV_FS_RMDIR, 
-    UV_FS_MKDIR, UV_FS_MKDTEMP, UV_FS_RENAME, UV_FS_SCANDIR, UV_FS_LINK, 
-    UV_FS_SYMLINK, UV_FS_READLINK, UV_FS_CHOWN, UV_FS_FCHOWN, UV_FS_REALPATH
-
-
-type 
-  uv_fs_s* = object 
-    data*: pointer
-    `type`*: uv_req_type
-    active_queue*: array[2, pointer]
-    reserved*: array[4, pointer]
-    fs_type*: uv_fs_type
-    loop*: ptr uv_loop_t
-    cb*: uv_fs_cb
-    result*: int
-    `ptr`*: pointer
-    path*: cstring
-    statbuf*: uv_stat_t
-
 
 proc uv_fs_req_cleanup*(req: ptr uv_fs_t) {.importc.}
 proc uv_fs_close*(loop: ptr uv_loop_t; req: ptr uv_fs_t; file: uv_file; 
