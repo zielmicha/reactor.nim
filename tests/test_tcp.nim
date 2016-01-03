@@ -5,7 +5,8 @@ proc acceptConn(conn: TcpConnection) =
   conn.input.forEachChunk(proc(x: seq[byte]) =
                           var x = x
                           echo ":", x
-                          discard conn.output.provideSome(x.seqView)).ignore()
+                          discard conn.output.provideSome(x.seqView)).
+      onError(proc(err: ref Exception) = conn.output.sendClose(err))
 
 proc main(x: TcpServer) =
   x.incomingConnections.forEach(acceptConn).ignore()

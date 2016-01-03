@@ -17,10 +17,6 @@ type
     input*: Stream[T]
     output*: Provider[T]
 
-  BytePipe* = Pipe[byte]
-  ByteStream* = Stream[byte]
-  ByteProvider* = Provider[byte]
-
   CloseException* = Exception
     ## Just close the stream/provider, without any error.
 
@@ -188,14 +184,6 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Futur
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[Bottom] =
   self.forEachChunk proc(x: ConstView[T]) =
     function(x.copyAsSeq)
-
-proc forEachChunk*(self: Stream[byte], function: (proc(x: string))): Future[Bottom] =
-  self.forEachChunk proc(x: ConstView[byte]) =
-    function(x.copyAsString)
-
-proc forEachChunk*(self: Stream[byte], function: (proc(x: string): Future[void])): Future[Bottom] =
-  self.forEachChunk proc(x: ConstView[byte]): Future[int] =
-    function(x.copyAsString).then(proc(): int = x.len)
 
 proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[Bottom] =
   self.forEachChunk proc(x: ConstView[T]) =

@@ -1,4 +1,5 @@
 import future
+import endians
 
 export future.`=>`, future.`->`
 
@@ -13,3 +14,39 @@ proc baseBufferSizeFor*[T](v: typedesc[T]): int =
     return 1
   else:
     return int(1024 / sizeof(v))
+
+proc convertEndian(size: static[int], dst: pointer, src: pointer) {.inline.} =
+  when size == 1:
+    copyMem(dst, src, 1)
+  else:
+    case endian:
+    of bigEndian:
+      when size == 2:
+        bigEndian16(dst, src)
+      elif size == 4:
+        bigEndian32(dst, src)
+      elif size == 8:
+        bigEndian64(dst, src)
+      else:
+        {.error: "Unsupported size".}
+    of lowEndian:
+      when size == 2:
+        lowEndian16(dst, src)
+      elif size == 4:
+        lowEndian32(dst, src)
+      elif size == 8:
+        lowEndian64(dst, src)
+      else:
+        {.error: "Unsupported size".}
+
+proc pack*[T](v: T, endian=bigEndian): string {.inline.} =
+  result = newString(sizeof(v))
+  convertEndian(sizeof(T), addr result[0], unsafeAddr v)
+
+proc unpack*[T](v: string, t: typedesc[T], endian=bigEndian): T {.inline.} =
+  assert v.len == sizeof(T)
+  convertEndian(sizeof(T), addr result, unsafeAddr v[0])
+
+proc unpack*[T](v: array, t: typedesc[T], endian=bigEndian): T {.inline.} =
+  static: assert v.high - v.low + 1 == sizeof(T)
+  convertEndian(addr result, unsafeAddr v[v.low])

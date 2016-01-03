@@ -219,6 +219,3 @@ proc ignore*[T](f: Future[T]) =
 
 proc completeError*(self: Completer, x: string) =
   self.completeError(newException(Exception, x))
-
-macro async*(a: expr): expr =
-  discard

@@ -72,10 +72,10 @@ type
     `type`*: uv_req_type
   uv_getaddrinfo_t* = uv_req_t
   uv_getnameinfo_t* = uv_req_t
-  uv_shutdown_t* = pointer
+  uv_shutdown_t* = uv_req_t
   uv_write_t* = uv_req_t
-  uv_connect_t* = pointer
-  uv_udp_send_t* = pointer
+  uv_connect_t* = uv_req_t
+  uv_udp_send_t* = uv_req_t
   uv_fs_t* = pointer
   uv_work_t* = pointer
   uv_cpu_info_t* = pointer

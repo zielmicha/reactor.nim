@@ -8,6 +8,7 @@ type UvStream* = ref object of BytePipe
   stream*: ptr uv_stream_t
   writeReq: ptr uv_write_t
   writingNow: uv_buf_t
+  shutdownReq: ptr uv_shutdown_t
 
 proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
   let self = cast[UvStream](stream.data)
