@@ -54,9 +54,9 @@ proc writeReady(self: UvStream) =
   let waiting = self.outputStream.peekMany()
 
   if waiting.len == 0:
-    self.outputStream.onRecvReady = proc() = self.writeReady()
+    self.outputStream.onRecvReady.addListener proc() = self.writeReady()
   else:
-    self.outputStream.onRecvReady = nothing
+    self.outputStream.onRecvReady.removeAllListeners
 
     self.writingNow = uv_buf_t(base: waiting.data, len: waiting.size)
     checkZero "write", uv_write(self.writeReq, self.stream, addr self.writingNow, 1, writeCb)
@@ -75,15 +75,15 @@ proc newUvStream*[T](stream: ptr uv_stream_t): T =
 
   self.recvStart()
 
-  self.inputProvider.onSendReady = proc() =
+  self.inputProvider.onSendReady.addListener proc() =
     self.recvStart()
 
-  self.outputStream.onRecvReady = proc() = self.writeReady()
+  self.outputStream.onRecvReady.addListener proc() = self.writeReady()
 
-  self.inputProvider.onRecvClose = proc(err: ref Exception) =
+  self.inputProvider.onRecvClose.addListener proc(err: ref Exception) =
     nil
 
-  self.outputStream.onSendClose = proc(err: ref Exception) =
+  self.outputStream.onSendClose.addListener proc(err: ref Exception) =
     nil
 
   return self

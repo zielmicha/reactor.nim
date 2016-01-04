@@ -4,10 +4,10 @@ type
     bufferSize: int
     queue: Queue[T]
 
-    onRecvReadyExec: LoopExecutor
-    onSendReadyExec: LoopExecutor
-    onRecvCloseExec: LoopExecutorWithArg[ref Exception]
-    onSendCloseExec: LoopExecutorWithArg[ref Exception]
+    onRecvReady: Event[void]
+    onSendReady: Event[void]
+    onRecvClose: Event[ref Exception]
+    onSendClose: Event[ref Exception]
     sendClosed: bool
     recvClosed: bool
 
@@ -31,22 +31,22 @@ proc newStreamProviderPair*[T](bufferSize=0): tuple[stream: Stream[T], provider:
   result.stream.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 64) else: bufferSize
   result.provider = Provider[T](result.stream)
 
-  result.stream.onRecvReadyExec = newLoopExecutor()
-  result.stream.onSendReadyExec = newLoopExecutor()
-  result.stream.onRecvCloseExec = newLoopExecutorWithArg[ref Exception]()
-  result.stream.onSendCloseExec = newLoopExecutorWithArg[ref Exception]()
+  newEvent(result.stream.onRecvReady)
+  newEvent(result.stream.onSendReady)
+  newEvent(result.stream.onRecvClose)
+  newEvent(result.stream.onSendClose)
 
-proc `onSendClose=`*[T](self: Stream[T], cb: proc(err: ref Exception)) =
-  self.onSendCloseExec.callback = cb
+proc `onSendClose`*[T](self: Stream[T]): auto =
+  self.onSendClose
 
-proc `onRecvClose=`*[T](self: Provider[T], cb: proc(err: ref Exception)) =
-  sself.onSendCloseExec.callback = cb
+proc `onRecvClose`*[T](self: Provider[T]): auto =
+  sself.onSendClose
 
-proc `onRecvReady=`*[T](self: Stream[T], cb: proc()) =
-  self.onRecvReadyExec.callback = cb
+proc `onRecvReady`*[T](self: Stream[T]): auto =
+  self.onRecvReady
 
-proc `onSendReady=`*[T](self: Provider[T], cb: proc()) =
-  sself.onSendReadyExec.callback = cb
+proc `onSendReady`*[T](self: Provider[T]): auto =
+  sself.onSendReady
 
 proc checkProvide(self: Provider) =
   if sself.sendClosed:
@@ -58,7 +58,7 @@ proc provideSome*[T](self: Provider[T], data: ConstView[T]): int =
   self.checkProvide()
   let doPush = min(self.freeBufferSize, data.len)
   if doPush != 0 and sself.queue.len == 0:
-    sself.onRecvReadyExec.enable()
+    sself.onRecvReady.callListener()
 
   sself.queue.pushBackMany(data)
   return doPush
@@ -77,16 +77,14 @@ proc sendClose*(self: Provider, exc: ref Exception) =
   ## Closes the provider -- signals that no more messages will be provided.
   if sself.sendClosed: return
   sself.sendClosed = true
-  sself.onSendCloseExec.arg = exc
-  sself.onSendCloseExec.enable()
+  sself.onSendClose.callListener(exc)
 
 proc recvClose*[T](self: Stream[T], exc: ref Exception) =
   ## Closes the stream -- signals that no more messages will be received.
   if self.recvClosed: return
   self.recvClosed = true
-  self.onRecvReady = nothing
-  self.onRecvCloseExec.arg = exc
-  self.onRecvCloseExec.enable()
+  self.onRecvReady.removeAllListeners
+  self.onRecvClose.callListener(exc)
 
 proc close*[T](self: Pipe[T], exc: ref Exception) =
   self.input.recvClose(exc)
@@ -103,7 +101,7 @@ proc peekMany*[T](self: Stream[T]): ConstView[T] =
 proc discardItems*[T](self: Stream[T], count: int) =
   ## Discard `count` items from the stream. Often used after `peekMany`.
   if Provider[T](self).freeBufferSize == 0 and count != 0:
-    self.onSendReadyExec.enable()
+    self.onSendReady.callListener()
 
   self.queue.popFront(count)
 
@@ -147,6 +145,7 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
   let completer = newCompleter[Bottom]()
 
   var onRecvContinue: (proc(n: int))
+  var recvListenerId: CallbackId
 
   var onRecvReady = proc() =
     while true: # FIXME: potentially infinite
@@ -157,7 +156,7 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
       if nitems.isCompleted:
         self.discardItems(nitems.get)
       else:
-        self.onRecvReady = nil
+        self.onRecvReady.removeListener(recvListenerId)
         nitems.onSuccessOrError(
           onSuccess=onRecvContinue,
           onError=proc(exc: ref Exception) = self.recvClose(exc))
@@ -165,12 +164,12 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
 
   onRecvContinue = proc(n: int) =
     self.discardItems(n)
-    self.onRecvReady = onRecvReady
+    recvListenerId = self.onRecvReady.addListener(onRecvReady)
     onRecvReady()
 
-  self.onRecvReady = onRecvReady
+  recvListenerId = self.onRecvReady.addListener(onRecvReady)
 
-  self.onSendClose = proc(exc: ref Exception) =
+  self.onSendClose.addListener proc(exc: ref Exception) =
     completer.completeError(exc)
 
   let f: Future[Bottom] = completer.getFuture

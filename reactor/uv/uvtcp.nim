@@ -36,6 +36,7 @@ proc onNewConnection(server: ptr uv_stream_t; status: cint) {.cdecl.} =
 
   let provided = serverObj.incomingConnectionsProvider.provideSome(singleItemView(conn))
   if provided == 0:
+    echo "Warning: dropped incoming TCP connection"
     # FIXME: don't accept connection if there is no space in the queue
     conn.BytePipe.close(new(CloseException))
 
@@ -51,7 +52,7 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
   proc closeTcpServer(err: ref Exception) =
     uv_close(cast[ptr uv_handle_t](server), tcpServerClosed)
 
-  serverObj.incomingConnectionsProvider.onRecvClose = closeTcpServer
+  serverObj.incomingConnectionsProvider.onRecvClose.addListener closeTcpServer
 
   GC_ref(serverObj)
   server.data = cast[pointer](serverObj)
