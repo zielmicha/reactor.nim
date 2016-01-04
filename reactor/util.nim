@@ -15,7 +15,7 @@ proc baseBufferSizeFor*[T](v: typedesc[T]): int =
   else:
     return int(1024 / sizeof(v))
 
-proc convertEndian(size: static[int], dst: pointer, src: pointer) {.inline.} =
+proc convertEndian(size: static[int], dst: pointer, src: pointer, endian=bigEndian) {.inline.} =
   when size == 1:
     copyMem(dst, src, 1)
   else:
@@ -29,13 +29,13 @@ proc convertEndian(size: static[int], dst: pointer, src: pointer) {.inline.} =
         bigEndian64(dst, src)
       else:
         {.error: "Unsupported size".}
-    of lowEndian:
+    of littleEndian:
       when size == 2:
-        lowEndian16(dst, src)
+        littleEndian16(dst, src)
       elif size == 4:
-        lowEndian32(dst, src)
+        littleEndian32(dst, src)
       elif size == 8:
-        lowEndian64(dst, src)
+        littleEndian64(dst, src)
       else:
         {.error: "Unsupported size".}
 
@@ -47,6 +47,6 @@ proc unpack*[T](v: string, t: typedesc[T], endian=bigEndian): T {.inline.} =
   assert v.len == sizeof(T)
   convertEndian(sizeof(T), addr result, unsafeAddr v[0])
 
-proc unpack*[T](v: array, t: typedesc[T], endian=bigEndian): T {.inline.} =
-  static: assert v.high - v.low + 1 == sizeof(T)
-  convertEndian(addr result, unsafeAddr v[v.low])
+#proc unpack*[T](v: array, t: typedesc[T], endian=bigEndian): T {.inline.} =
+#  static: assert v.high - v.low + 1 == sizeof(T)
+#  convertEndian(addr result, unsafeAddr v[v.low])
