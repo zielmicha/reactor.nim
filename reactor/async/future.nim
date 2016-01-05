@@ -69,6 +69,9 @@ proc immediateFuture*[T](value: T): Future[T] =
   result.isImmediate = true
   result.value = value
 
+proc immediateFuture*(): Future[void] =
+  result.isImmediate = true
+
 proc immediateError*[T](value: string): Future[T] =
   let self = newCompleter[T]()
   self.completeError(value)
@@ -101,6 +104,9 @@ proc complete*[T](self: Completer[T], x: T) =
     self.result = x
   if callback != nil:
     callback(data, self)
+
+proc complete*(self: Completer[void]) =
+  complete[void](self)
 
 proc completeError*[T](self: Completer[T], x: ref Exception) =
   assert (not self.isFinished)

@@ -66,10 +66,33 @@ proc provideSome*[T](self: Provider[T], data: ConstView[T]): int =
   sself.queue.pushBackMany(data)
   return doPush
 
-proc provideAll*[T](self: Provider[T], data: seq[T]): Future[void] =
+proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
   ## Provides items from `data`. Returns Future that finishes when all
   ## items are provided.
-  raise newException(Exception, "not implemented")
+  when type(data) is string and not (T is byte):
+    {.error: "writing strings only supported for byte streams".}
+
+  self.checkProvide()
+
+  var offset = self.provideSome(asByteView(data))
+  if offset == data.len:
+    return immediateFuture()
+
+  let completer = newCompleter[void]()
+  var sendListenerId: CallbackId
+  var closeListenerId: CallbackId
+
+  sendListenerId = self.onSendReady.addListener(proc() =
+    offset = self.provideSome(asByteView(data).slice(offset))
+    if offset == data.len:
+      completer.complete()
+      self.onSendReady.removeListener sendListenerId
+      self.onRecvClose.removeListener closeListenerId)
+
+  closeListenerId = self.onRecvClose.addListener(proc(err: ref Exception) =
+    completer.completeError(err)
+    self.onSendReady.removeListener sendListenerId
+    self.onRecvClose.removeListener closeListenerId)
 
 proc provide*[T](self: Provider[T], item: T): Future[void] =
   ## Provides a signle. Returns Future that finishes when the item
@@ -108,40 +131,82 @@ proc discardItems*[T](self: Stream[T], count: int) =
 
   self.queue.popFront(count)
 
+proc receiveSomeInto*[T](self: Stream[T], target: View[T]): int =
+  ## Pops all available data into `target`, but not more that the length of `target`.
+  ## Returns the number of bytes copied to target.
+  var offset = 0
+  while true:
+    let view = self.peekMany()
+    let doRecv = min(target.len - offset, view.len)
+    if doRecv == 0: break
+    view.copyTo(target.slice(offset))
+    self.discardItems(doRecv)
+    offset += doRecv
+  return offset
+
 proc receive*[T](self: Stream[T]): Future[T] =
   ## Pop an item from the stream.
   return self.receiveMany(1).then(x => x[0])
 
-proc receiveMany*[T](self: Stream[T], limit=64 * 1024): Future[seq[T]] =
+proc receiveMany[T, Ret](self: Stream[T], limit=64 * 1024, returnType: typedesc[Ret]): Future[Ret] =
   ## Pop unspecified number of items from the stream.
   if self.queue.len != 0:
     let view = self.peekMany()
     let doPop = min(limit, view.len)
-    let r = view.slice(0, doPop).copyAsSeq()
-    r.shallow()
+    let r = view.slice(0, doPop).copyAs(Ret)
+    when returnType is seq: r.shallow()
     self.discardItems(doPop)
     return immediateFuture(r)
 
-  let completer = newCompleter()
+  let completer = newCompleter[Ret]()
 
-  self.onSendReady = proc() =
-    completer.completeFrom(self.receiveMany(limit=limit))
-    self.onSendReady = nil
+  var listenerReadId: CallbackId
+  var listenerCloseId: CallbackId
 
-  self.onSendClose = proc() =
-    completer.completeError("stream closed")
+  listenerReadId = self.onSendReady.addListener(proc() =
+    completer.completeFrom(self.receiveMany(limit=limit, returnType=Ret))
+    self.onSendReady.removeListener listenerReadId
+    self.onRecvClose.removeListener listenerCloseId)
+
+  listenerCloseId = self.onRecvClose.addListener(proc(err: ref Exception) =
+    completer.completeError(err)
+    self.onSendReady.removeListener listenerReadId
+    self.onRecvClose.removeListener listenerCloseId)
+
+  return completer.getFuture
+
+proc receiveMany[T, Ret](self: Stream[T], limit=64 * 1024): Future[seq[T]] =
+  self.receiveMany(limit, seq[T])
+
+proc receiveAll[T, Ret](self: Stream[T], n: int, returnType: typedesc[Ret]): Future[Ret] =
+  var res: Ret = when Ret is seq: newSeq[T](n) else: newString(n)
+
+  var offset = self.receiveSomeInto(res.asView)
+  if offset == res.len:
+    return immediateFuture(res)
+
+  let completer = newCompleter[Ret]()
+
+  var recvListenerId: CallbackId
+  var closeListenerId: CallbackId
+
+  recvListenerId = self.onRecvReady.addListener(proc() =
+    offset += self.receiveSomeInto(res.asView.slice(offset))
+    if offset == res.len:
+      completer.complete(res)
+      self.onRecvReady.removeListener recvListenerId
+      self.onSendClose.removeListener closeListenerId)
+
+  closeListenerId = self.onSendClose.addListener(proc(err: ref Exception) =
+    completer.completeError(err)
+    self.onRecvReady.removeListener recvListenerId
+    self.onSendClose.removeListener closeListenerId)
 
   return completer.getFuture
 
-proc receiveAll*[T](self: Stream[T], n: int): Future[seq[T]] =
-  ## Pop `n` items from the stream.
-
-  var res: seq[T] = @[]
-  let completer = newCompleter()
-
-  static: assert 0, "unimplemented"
-
-  return completer.getFuture
+proc receiveAll[T](self: Stream[T], n: int): Future[seq[T]] =
+  ## Pops `n` items from the stream.
+  receiveAll(self, n, seq[T])
 
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[int])): Future[Bottom] =
   ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
@@ -149,6 +214,7 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
 
   var onRecvContinue: (proc(n: int))
   var recvListenerId: CallbackId
+  var closeListenerId: CallbackId
 
   var onRecvReady = proc() =
     while true: # FIXME: potentially infinite

@@ -12,6 +12,7 @@ proc newEvent*[T](): Event[T] =
 
 proc newEvent*[T](t: var Event[T]) =
   new(t)
+  t.nextId = 1
   t.callbacks = initTable[CallbackId, proc(arg: T)]()
   t.executor = newLoopExecutor()
 

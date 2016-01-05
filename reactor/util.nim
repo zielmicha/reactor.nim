@@ -12,7 +12,7 @@ proc nothing1*[T](t: T) {.procvar.} = return
 proc baseBufferSizeFor*[T](v: typedesc[T]): int =
   when sizeof(T) > 1024:
     return 1
-  elif v is ref:
+  elif v is ref or v is seq or v is string:
     return 1
   else:
     return int(1024 / sizeof(v))

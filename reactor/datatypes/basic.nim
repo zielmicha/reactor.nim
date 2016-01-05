@@ -28,6 +28,13 @@ proc stringView*(s: var string): View[byte] =
   result.data = addr s[0]
   result.size = s.len
 
+proc asView*(s: var string): auto = stringView(s)
+
+proc asView*(s: var seq): auto = seqView(s)
+
+template asByteView*(s): ByteView =
+  ByteView(data: s[0].unsafeAddr, size: s.len)
+
 converter viewToConstView*[T](v: View[T]): ConstView[T] =
   result.data = v.data
   result.size = v.size
@@ -77,6 +84,12 @@ proc copyAsSeq*[T](src: SomeView[T]): seq[T] =
 proc copyAsString*(src: SomeView[byte]): string =
   result = newString(src.len)
   src.copyTo(result.stringView)
+
+proc copyAs*[R, T](src: SomeView[R], t: typedesc[T]): T =
+  when t is seq:
+    return copyAsSeq[R](src)
+  else:
+    return copyAsString(src)
 
 iterator items*[T](src: SomeView[T]): T =
   for i in 0..<src.len:
