@@ -84,3 +84,50 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
     return immediateFuture(serverObj)
 
   return resolveAddress(host).then(resolved)
+
+proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
+  let connectReq = cast[ptr uv_connect_t](newUvReq(UV_CONNECT))
+
+  type State = ref object
+    completer: Completer[TcpConnection]
+    sockaddress: ptr SockAddr
+    errMsg: string
+
+  let state = new(State)
+  GC_ref(state)
+  connectReq.data = cast[pointer](state)
+  state.completer = newCompleter[TcpConnection]()
+  state.sockaddress = cast[ptr SockAddr](alloc0(sizeof(Sockaddr_storage)))
+  ipaddrToSockaddr(state.sockaddress, host, port)
+
+  state.errMsg = "connect to [" & $host & "]:" & $port
+
+  proc connectCb(req: ptr uv_connect_t, status: cint) {.cdecl.} =
+    let state = cast[State](req.data)
+    if status < 0:
+      state.completer.completeError(uvError(status, state.errMsg))
+      # FIXME: close handle
+    else:
+      state.completer.complete(newUvStream[TcpConnection](req.handle))
+
+    dealloc(state.sockaddress)
+    GC_unref(state)
+
+  let handle = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
+  checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), handle)
+  let ret = uv_tcp_connect(connectReq, handle, state.sockaddress, connectCb)
+  if ret < 0:
+    return immediateError[TcpConnection](uvError(ret, state.errMsg))
+  else:
+    return state.completer.getFuture
+
+proc connectTcp*(host: string, port: int): Future[TcpConnection] =
+  # TODO: add bindHost
+
+  proc resolved(addresses: seq[IpAddress]): Future[TcpConnection] =
+    if addresses.len == 0:
+      return immediateError[TcpConnection]("no address resolved")
+    else: # TODO: iterate over addresses
+      return connectTcp(addresses[0], port)
+
+  return resolveAddress(host).then(resolved)

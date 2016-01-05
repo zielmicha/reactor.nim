@@ -61,6 +61,17 @@ type
     path*: cstring
     statbuf*: uv_stat_t
 
+  uv_connect_s* = object
+    data*: pointer
+    `type`*: uv_req_type
+    active_queue*: array[2, pointer]
+    reserved*: array[4, pointer]
+    cb*: uv_connect_cb
+    handle*: ptr uv_stream_t
+
+  uv_udp_flags* = enum
+    UV_UDP_IPV6ONLY = 1, UV_UDP_PARTIAL = 2, UV_UDP_REUSEADDR = 4
+
   uv_errno_t* = cint
 
   uv_handle_type* = enum
@@ -96,7 +107,7 @@ type
   uv_getnameinfo_t* = uv_req_t
   uv_shutdown_t* = uv_req_t
   uv_write_t* = uv_req_t
-  uv_connect_t* = uv_req_t
+  uv_connect_t* = uv_connect_s
   uv_udp_send_t* = uv_req_t
   uv_fs_t* = uv_fs_s
   uv_work_t* = pointer
@@ -315,18 +326,6 @@ proc uv_tcp_getpeername*(handle: ptr uv_tcp_t; name: ptr SockAddr;
                          namelen: ptr cint): cint {.importc.}
 proc uv_tcp_connect*(req: ptr uv_connect_t; handle: ptr uv_tcp_t; 
                      `addr`: ptr SockAddr; cb: uv_connect_cb): cint {.importc.}
-type 
-  uv_connect_s* = object 
-    data*: pointer
-    `type`*: uv_req_type
-    active_queue*: array[2, pointer]
-    reserved*: array[4, pointer]
-    cb*: uv_connect_cb
-    handle*: ptr uv_stream_t
-
-  uv_udp_flags* = enum 
-    UV_UDP_IPV6ONLY = 1, UV_UDP_PARTIAL = 2, UV_UDP_REUSEADDR = 4
-
 
 type 
   uv_udp_send_cb* = proc (req: ptr uv_udp_send_t; status: cint)

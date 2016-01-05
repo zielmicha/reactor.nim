@@ -9,6 +9,10 @@ proc acceptConn(conn: TcpConnection) =
       onError(proc(err: ref Exception) = conn.output.sendClose(err))
 
 proc main(x: TcpServer) =
+  connectTcp("127.0.0.1", 6666).then(proc(conn: TcpConnection) =
+    var s = @[byte(0), byte(0), byte(0)]
+    discard conn.output.provideSome(s.seqView.viewToConstView)
+    conn.output.sendClose(JustClose)).ignore()
   x.incomingConnections.forEach(acceptConn).ignore()
 
 let srv = createTcpServer(6666)

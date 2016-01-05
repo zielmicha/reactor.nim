@@ -20,6 +20,9 @@ type
   CloseException* = Exception
     ## Just close the stream/provider, without any error.
 
+let
+  JustClose* = new(CloseException)
+
 proc getStream[T](s: Provider[T]): Stream[T] {.inline.} = Stream[T](s)
 
 template sself = self.getStream
