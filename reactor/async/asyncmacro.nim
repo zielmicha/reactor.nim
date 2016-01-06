@@ -12,11 +12,13 @@ proc iterFuture[T](f: Future[T]): AsyncIterator =
 
 template awaitInIterator*(body: expr): expr =
   let fut = body
-  if fut.isCompleted:
-    fut.get
-  else:
+  if not fut.isCompleted:
     yield iterFuture(fut)
-    fut.get
+  if not (fut.isImmediate or fut.completer.isSuccess):
+    asyncProcCompleter.completeError(fut.completer.error)
+    yield AsyncIterator(callback: nil) # we will never be called again
+
+  fut.get
 
 template await*(body): expr =
   {.error: "await outside of an async proc".}
@@ -26,10 +28,11 @@ proc asyncIteratorRun*(it: (iterator(): AsyncIterator)) =
   var asyncIter = it()
   if finished(it):
     return
-  asyncIter.callback(proc() = asyncIteratorRun(it))
+  if asyncIter.callback != nil:
+    asyncIter.callback(proc() = asyncIteratorRun(it))
 
 macro async*(a): stmt =
-  ## `async` macro. Enables you to write asynchronous code in a similar manner to synchrous code.
+  ## `async` macro. Enables you to write asynchronous code in a similar manner to synchronous code.
   ##
   ## For example:
   ## ```
@@ -46,7 +49,6 @@ macro async*(a): stmt =
     error("invalid return type from async proc (expected Future[T])")
 
   let returnType = returnTypeFull[1]
-  echo returnType.treeRepr
 
   let asyncHeader = parseStmt("""
 template await(e: expr): expr = awaitInIterator(e)

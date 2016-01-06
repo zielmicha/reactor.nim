@@ -1,11 +1,17 @@
+# TEST.
+discard """start add5
+got a 5
+got b 1
+returned 6"""
+
 import reactor/async, reactor/loop
 
 proc add5(num: Future[int]): Future[int] =
-   let completer = newCompleter[int]()
+   let asyncProcCompleter = newCompleter[int]()
 
    template await(e: expr): expr = awaitInIterator(e)
    template asyncReturn(e: expr): expr =
-     completer.complete(e)
+     asyncProcCompleter.complete(e)
      return
 
    let iter = iterator(): AsyncIterator {.closure.} =
@@ -18,7 +24,7 @@ proc add5(num: Future[int]): Future[int] =
      echo "not executed"
 
    asyncIteratorRun(iter)
-   return completer.getFuture
+   return asyncProcCompleter.getFuture
 
 let my1 = newCompleter[int]()
 let my6 = add5(my1.getFuture)
