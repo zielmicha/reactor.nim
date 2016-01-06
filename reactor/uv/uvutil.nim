@@ -18,8 +18,16 @@ proc newUvHandle*(`type`: uv_handle_type): pointer =
 proc freeUv*(t: ptr) =
   freeShared(t)
 
+var threadLoopId  {.threadvar.}: int
+var globalLoopId: int
+
 proc getThreadUvLoop*(): ptr uv_loop_t =
-  # TODO
+  # TODO: support multithreading
+  # for now, check if running on main thread
+  if globalLoopId == 0:
+    globalLoopId = 1
+    threadLoopId = 1
+  assert threadLoopId == globalLoopId
   return uv_default_loop()
 
 proc uvError*(code: cint|int, info: string): ref Exception =

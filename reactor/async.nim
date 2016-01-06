@@ -9,7 +9,7 @@ include reactor/async/event
 include reactor/async/future
 include reactor/async/stream
 include reactor/async/bytes
-include reactor/async/macros
+include reactor/async/asyncmacro
 
 import reactor/datatypes/basic
 export ConstView, View, ByteView, viewToConstView, seqView, basic.len, singleItemView

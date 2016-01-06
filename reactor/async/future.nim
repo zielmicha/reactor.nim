@@ -9,7 +9,7 @@ type
     of false:
       completer: Completer[T]
 
-  Completer*[T] = ref object
+  Completer*[T] = ref object of RootObj
     when debugFutures:
       stackTrace: string
 
@@ -90,7 +90,10 @@ proc get*[T](self: Future[T]): T =
     return self.value
   else:
     assert self.completer.isFinished
-    return self.completer.result
+    if self.completer.isSuccess:
+      return self.completer.result
+    else:
+      raise self.completer.error
 
 proc complete*[T](self: Completer[T], x: T) =
   assert (not self.isFinished)
