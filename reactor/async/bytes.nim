@@ -17,8 +17,11 @@ proc read*(self: Stream[byte], count: int): Future[string] =
 proc readItem*[T](self: Stream[byte], `type`: typedesc[T], endian=bigEndian): Future[T] =
   return self.read(sizeof(T)).then(proc(x: string): T = unpack(x, T, endian))
 
-proc readChunkPrefixed*(self: Stream[byte]): Future[string] =
-  raise newException(Exception, "not implemented")
+proc readChunkPrefixed*(self: Stream[byte]): Future[string] {.async.} =
+  let length = await self.readItem(uint32)
+  if length > uint32(16 * 1024 * 1024):
+    asyncRaise("length too big")
+  asyncReturn(await self.read(length.int))
 
 proc write*[T](self: Provider[T], data: string): Future[void] =
   self.provideAll(data)

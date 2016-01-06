@@ -18,7 +18,8 @@ template awaitInIterator*(body: expr): expr =
     asyncProcCompleter.completeError(fut.completer.error)
     yield AsyncIterator(callback: nil) # we will never be called again
 
-  fut.get
+  when not (fut is Future[void]):
+    fut.get
 
 template await*(body): expr =
   {.error: "await outside of an async proc".}
@@ -41,17 +42,25 @@ macro async*(a): stmt =
   ## ```
 
   let procName = a[0]
+  let params = if a[3].len > 1: a[3][1] else: nil
   let pragmas = a[4]
   let body = a[6]
   let returnTypeFull = a[3][0]
 
-  if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future"):
+  if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future")):
     error("invalid return type from async proc (expected Future[T])")
 
-  let returnType = returnTypeFull[1]
+  let returnType = if returnTypeFull.kind == nnkEmpty: newIdentNode(!"void")
+                   else: returnTypeFull[1]
+  let returnTypeNew = newNimNode(nnkBracketExpr)
+  returnTypeNew.add newIdentNode(!"Future")
+  returnTypeNew.add returnType
 
   let asyncHeader = parseStmt("""
 template await(e: expr): expr = awaitInIterator(e)
+template asyncRaise(e: expr): expr =
+  asyncProcCompleter.completeError(e)
+  return
 template asyncReturn(e: expr): expr =
   asyncProcCompleter.complete(e)
   return""")
@@ -64,8 +73,14 @@ return asyncProcCompleter.getFuture""")
   headerNext[0][2][0][1] = returnType
   asyncHeader.add headerNext
 
-  let asyncBody = parseStmt("""let iter = iterator(): AsyncIterator {.closure.} =
-    discard""")[0]
+  var asyncBodyTxt = """let iter = iterator(): AsyncIterator {.closure.} =
+    discard
+    """
+  if returnType == newIdentNode(!"void"):
+    asyncBodyTxt &= "asyncProcCompleter.complete()"
+  else:
+    asyncBodyTxt &= "asyncProcCompleter.completeError(\"missing asyncReturn\")"
+  let asyncBody = parseStmt(asyncBodyTxt)[0]
 
   asyncBody[0][2][6] = body
 
@@ -73,7 +88,10 @@ return asyncProcCompleter.getFuture""")
   asyncHeader.add(asyncFooter)
 
   result = newProc(procName)
-  result[3] = a[3]
+  result[3] = newNimNode(nnkFormalParams)
+  result[3].add returnTypeNew
+  if params != nil:
+    result[3].add params
   result[4] = pragmas
   result[6] = asyncHeader
 

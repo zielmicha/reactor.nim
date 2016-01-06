@@ -139,7 +139,7 @@ proc receiveSomeInto*[T](self: Stream[T], target: View[T]): int =
     let view = self.peekMany()
     let doRecv = min(target.len - offset, view.len)
     if doRecv == 0: break
-    view.copyTo(target.slice(offset))
+    view.slice(0, doRecv).copyTo(target.slice(offset))
     self.discardItems(doRecv)
     offset += doRecv
   return offset
