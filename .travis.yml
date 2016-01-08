@@ -4,4 +4,4 @@ services:
 before_install:
   - docker pull yglukhov/devel
 script:
-  - docker run -v "$(pwd):/project" -w /project yglukhov/devel sh -c "apt-get update && apt-get install -y python3 && ls && find && python3 bin/runtests.py"
+  - docker run -v "$(pwd):/project" -w /project yglukhov/devel sh -c "apt-get update && apt-get install -y python3 && python3 bin/runtests.py"
