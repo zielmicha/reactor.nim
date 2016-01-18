@@ -39,7 +39,10 @@ converter viewToConstView*[T](v: View[T]): ConstView[T] =
   result.data = v.data
   result.size = v.size
 
-proc len*(v: SomeView): int =
+proc len*(v: View): int =
+  v.size
+
+proc len*(v: ConstView): int =
   v.size
 
 proc asPointer*[T](v: SomeView[T]): ptr T =
@@ -77,7 +80,7 @@ proc copyFrom*[T](dst: View[T], src: SomeView[T]) =
 proc copyTo*[T](src: SomeView[T], dst: View[T]) =
   dst.copyFrom(src)
 
-proc copyAsSeq*[T](src: SomeView[T]): seq[T] =
+proc copyAsSeq*[T](src: ConstView[T]): seq[T] =
   result = newSeq[T](src.len)
   src.copyTo(result.seqView)
 

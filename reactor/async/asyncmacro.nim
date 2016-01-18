@@ -1,4 +1,4 @@
-import macros
+import macros, sequtils
 
 type
   AsyncIterator* = object
@@ -15,6 +15,7 @@ template awaitInIterator*(body: expr): expr =
   if not fut.isCompleted:
     yield iterFuture(fut)
   if not (fut.isImmediate or fut.completer.isSuccess):
+    fut.completer.consumed = true
     asyncProcCompleter.completeError(fut.completer.error)
     yield AsyncIterator(callback: nil) # we will never be called again
 
@@ -42,7 +43,8 @@ macro async*(a): stmt =
   ## ```
 
   let procName = a[0]
-  let params = if a[3].len > 1: a[3][1] else: nil
+  let allParams = toSeq(a[3].items)
+  let params = if allParams.len > 0: allParams[1..<allParams.len] else: @[]
   let pragmas = a[4]
   let body = a[6]
   let returnTypeFull = a[3][0]
@@ -82,7 +84,7 @@ return asyncProcCompleter.getFuture""")
     asyncBodyTxt &= "asyncProcCompleter.completeError(\"missing asyncReturn\")"
   let asyncBody = parseStmt(asyncBodyTxt)[0]
 
-  asyncBody[0][2][6] = body
+  asyncBody[0][2][6][0] = body
 
   asyncHeader.add(asyncBody)
   asyncHeader.add(asyncFooter)
@@ -90,8 +92,8 @@ return asyncProcCompleter.getFuture""")
   result = newProc(procName)
   result[3] = newNimNode(nnkFormalParams)
   result[3].add returnTypeNew
-  if params != nil:
-    result[3].add params
+  for param in params:
+    result[3].add param
   result[4] = pragmas
   result[6] = asyncHeader
 

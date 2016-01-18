@@ -63,6 +63,6 @@ template uvTopCallback*(c: stmt): stmt {.immediate.} =
   try:
     c
   except:
-    echo "Error occured inside the event loop:"
+    echo "Error occured inside the event loop: ", getCurrentExceptionMsg()
     echo getCurrentException().getStackTrace
     c_exit(1)

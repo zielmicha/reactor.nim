@@ -27,6 +27,11 @@ proc getStream[T](s: Provider[T]): Stream[T] {.inline.} = Stream[T](s)
 
 template sself = self.getStream
 
+proc newPipe*[T](input: Stream[T], output: Provider[T]): Pipe[T] =
+  new(result)
+  result.input = input
+  result.output = output
+
 proc newStreamProviderPair*[T](bufferSize=0): tuple[stream: Stream[T], provider: Provider[T]] =
   new(result.stream)
   result.stream.queue = newQueue[T]()
@@ -97,7 +102,28 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
 proc provide*[T](self: Provider[T], item: T): Future[void] =
   ## Provides a signle. Returns Future that finishes when the item
   ## is pushed into queue.
-  return self.provideMany(@[item])
+
+  self.checkProvide()
+
+  var item = item
+  if self.provideSome(singleItemView(item)) == 1:
+    return immediateFuture()
+
+  let completer = newCompleter[void]()
+  var sendListenerId: CallbackId
+  var closeListenerId: CallbackId
+
+  sendListenerId = self.onSendReady.addListener(proc() =
+    if self.provideSome(singleItemView(item)) == 1:
+      completer.complete()
+      self.onSendReady.removeListener sendListenerId
+      self.onRecvClose.removeListener closeListenerId)
+
+  closeListenerId = self.onRecvClose.addListener(proc(err: ref Exception) =
+    completer.completeError(err)
+    self.onSendReady.removeListener sendListenerId
+    self.onRecvClose.removeListener closeListenerId)
+
 
 proc sendClose*(self: Provider, exc: ref Exception) =
   ## Closes the provider -- signals that no more messages will be provided.
@@ -144,40 +170,6 @@ proc receiveSomeInto*[T](self: Stream[T], target: View[T]): int =
     offset += doRecv
   return offset
 
-proc receive*[T](self: Stream[T]): Future[T] =
-  ## Pop an item from the stream.
-  return self.receiveMany(1).then(x => x[0])
-
-proc receiveMany[T, Ret](self: Stream[T], limit=64 * 1024, returnType: typedesc[Ret]): Future[Ret] =
-  ## Pop unspecified number of items from the stream.
-  if self.queue.len != 0:
-    let view = self.peekMany()
-    let doPop = min(limit, view.len)
-    let r = view.slice(0, doPop).copyAs(Ret)
-    when returnType is seq: r.shallow()
-    self.discardItems(doPop)
-    return immediateFuture(r)
-
-  let completer = newCompleter[Ret]()
-
-  var listenerReadId: CallbackId
-  var listenerCloseId: CallbackId
-
-  listenerReadId = self.onSendReady.addListener(proc() =
-    completer.completeFrom(self.receiveMany(limit=limit, returnType=Ret))
-    self.onSendReady.removeListener listenerReadId
-    self.onRecvClose.removeListener listenerCloseId)
-
-  listenerCloseId = self.onRecvClose.addListener(proc(err: ref Exception) =
-    completer.completeError(err)
-    self.onSendReady.removeListener listenerReadId
-    self.onRecvClose.removeListener listenerCloseId)
-
-  return completer.getFuture
-
-proc receiveMany[T, Ret](self: Stream[T], limit=64 * 1024): Future[seq[T]] =
-  self.receiveMany(limit, seq[T])
-
 proc receiveAll[T, Ret](self: Stream[T], n: int, returnType: typedesc[Ret]): Future[Ret] =
   var res: Ret = when Ret is seq: newSeq[T](n) else: newString(n)
 
@@ -207,6 +199,10 @@ proc receiveAll[T, Ret](self: Stream[T], n: int, returnType: typedesc[Ret]): Fut
 proc receiveAll[T](self: Stream[T], n: int): Future[seq[T]] =
   ## Pops `n` items from the stream.
   receiveAll(self, n, seq[T])
+
+proc receive*[T](self: Stream[T]): Future[T] =
+  ## Pop an item from the stream.
+  return self.receiveAll(1).then((x: seq[T]) => x[0])
 
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[int])): Future[Bottom] =
   ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
@@ -258,30 +254,34 @@ proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[Bottom] =
     for i in 0..<x.len:
       function(x[i])
 
-proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(source: ConstView[T], target: var seq[R]))=identity) =
+proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil) =
   proc pipeSome() =
-    let view = self.peekMany()
-    if view.len == 0: return
-    var didSend: int
-    if function == identity:
-      didSend = target.provideSome(view)
-    else:
-      let doSend = target.freeBufferSize()
-      var buffer = newSeq(view.len)
-      function(view, buffer)
-      didSend = target.provideSome(buffer)
-    self.discardItems(didSend)
+    while true:
+      let view = self.peekMany()
+      if view.len == 0: break
+      var didSend: int
+      if function == nil:
+        when T is R:
+          didSend = target.provideSome(view)
+        else:
+          doAssert(false)
+      else:
+        let doSend = target.freeBufferSize()
+        var buffer = newSeq[R](view.len)
+        function(view, buffer)
+        didSend = target.provideSome(buffer.seqView)
 
-  let completer = newCompleter()
+      self.discardItems(didSend)
+      if didSend == 0: break
 
-  self.onSendReady = pipeSome
-  target.onRecvReady = pipeSome
+  target.onSendReady.addListener(pipeSome)
+  self.onRecvReady.addListener(pipeSome)
 
-  self.onSendClose = proc(info: ref Exception) =
-    target.closeRecv(info)
+  self.onSendClose.addListener(proc(info: ref Exception) =
+    target.sendClose(info))
 
-  target.onRecvClose = proc(info: ref Exception) =
-    self.closeRecv(info)
+  target.onRecvClose.addListener(proc(info: ref Exception) =
+    self.recvClose(info))
 
 proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
   return proc(source: ConstView[T], target: var seq[R]) =
@@ -289,7 +289,7 @@ proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
       target[i] = f(source[i])
 
 proc pipe*[T, R](self: Stream[T], target: Provider[R], function: (proc(x: T): R)) =
-  pipe(self, target, mapperFunc(function))
+  pipeChunks(self, target, mapperFunc(function))
 
 proc pipe*[T](self: Stream[T], target: Provider[T]) =
   pipeChunks(self, target, identity)
@@ -303,6 +303,11 @@ proc map*[T, R](self: Stream[T], function: (proc(x: T): R)): Stream[R] =
   let (rstream, rprovider) = newStreamProviderPair[R]()
   pipe(self, rprovider, function)
   return rstream
+
+proc map*[T, R](self: Provider[T], function: (proc(x: R): T)): Provider[R] =
+  let (rstream, rprovider) = newStreamProviderPair[R]()
+  pipe(rstream, self, function)
+  return rprovider
 
 proc unwrapStreamFuture[T](f: Future[Stream[T]]): Stream[T] =
   # TODO: implement this without extra copy

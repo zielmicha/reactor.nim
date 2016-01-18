@@ -87,11 +87,14 @@ proc isCompleted*(self: Future): bool =
 
 proc get*[T](self: Future[T]): T =
   if self.isImmediate:
-    return self.value
+    when T is not void:
+      return self.value
   else:
     assert self.completer.isFinished
+    self.completer.consumed = true
     if self.completer.isSuccess:
-      return self.completer.result
+      when T is not void:
+        return self.completer.result
     else:
       raise self.completer.error
 
@@ -228,3 +231,12 @@ proc ignore*[T](f: Future[T]) =
 
 proc completeError*(self: Completer, x: string) =
   self.completeError(newException(Exception, x))
+
+proc runLoop*[T](f: Future[T]): T =
+  var loopRunning = true
+  while not f.isCompleted:
+    if not loopRunning:
+      raise newException(Exception, "loop finished, but future is still uncompleted")
+    loopRunning = runLoopOnce()
+
+  f.get

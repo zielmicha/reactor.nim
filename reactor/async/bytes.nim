@@ -23,8 +23,40 @@ proc readChunkPrefixed*(self: Stream[byte]): Future[string] {.async.} =
     asyncRaise("length too big")
   asyncReturn(await self.read(length.int))
 
+proc readChunksPrefixed*(self: Stream[byte]): Stream[string] =
+  let (stream, provider) = newStreamProviderPair[string]()
+
+  proc pipeChunks() {.async.} =
+    while true:
+      let chunk = await self.readChunkPrefixed()
+      await provider.provide(chunk)
+
+  pipeChunks().onSuccessOrError(
+    onSuccess=nil,
+    onError=proc(err: ref Exception) = provider.sendClose(err))
+
+  return stream
+
 proc write*[T](self: Provider[T], data: string): Future[void] =
   self.provideAll(data)
 
 proc writeItem*[T](self: Provider[byte], item: T, endian=bigEndian): Future[void] =
   return self.write(pack(item, endian))
+
+proc writeChunkPrefixed*(self: Provider[byte], item: string): Future[void] {.async.} =
+  await self.writeItem(item.len.uint32)
+  await self.write(item)
+
+proc writeChunksPrefixed*(self: Provider[byte]): Provider[string] =
+  let (stream, provider) = newStreamProviderPair[string]()
+
+  proc pipeChunks() {.async.} =
+    while true:
+      let item = await stream.receive()
+      await self.writeChunkPrefixed(item)
+
+  pipeChunks().onSuccessOrError(
+    onSuccess=nil,
+    onError=proc(err: ref Exception) = stream.recvClose(err))
+
+  return provider

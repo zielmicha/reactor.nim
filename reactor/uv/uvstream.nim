@@ -81,9 +81,9 @@ proc newUvStream*[T](stream: ptr uv_stream_t): T =
   self.outputStream.onRecvReady.addListener proc() = self.writeReady()
 
   self.inputProvider.onRecvClose.addListener proc(err: ref Exception) =
-    nil
+    discard # TODO
 
   self.outputStream.onSendClose.addListener proc(err: ref Exception) =
-    nil
+    discard # TODO
 
   return self
