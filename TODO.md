@@ -5,3 +5,4 @@ TODO
 * optimize `then` for immediate futures
 * close UV streams
 * stacktraces in futures
+* support asyncfor

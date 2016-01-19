@@ -9,13 +9,14 @@ type
     of false:
       completer: Completer[T]
 
-  Completer*[T] = ref object of RootObj
+  CompleterNil[T] = ref object of RootObj
     when debugFutures:
       stackTrace: string
 
+    consumed: bool
+
     case isFinished: bool
     of true:
-      consumed: bool
       case isSuccess: bool
       of true:
         result: T
@@ -24,6 +25,8 @@ type
     of false:
       data: RootRef
       callback: (proc(data: RootRef, future: Completer[T]) {.closure.})
+
+  Completer*[T] = CompleterNil[T]
 
   Bottom* = object
 
@@ -50,14 +53,13 @@ proc `$`*[T](c: Completer[T]): string =
   "Completer " & makeInfo(c.getFuture)
 
 proc getFuture*[T](c: Completer[T]): Future[T] =
-  result.isImmediate = false
-  result.completer = c
+  Future[T](isImmediate: false, completer: c)
 
 proc destroyCompleter[T](f: Completer[T]) =
   if not f.consumed:
-    echo "Destroyed unconsumed future"
+    stderr.writeLine "Destroyed unconsumed future ", $f.getFuture
     when debugFutures:
-      echo f.stackTrace
+      stderr.writeLine f.stackTrace
 
 proc newCompleter*[T](): Completer[T] =
   new(result, destroyCompleter[T])
@@ -66,11 +68,10 @@ proc newCompleter*[T](): Completer[T] =
     result.stackTrace = getStackTrace()
 
 proc immediateFuture*[T](value: T): Future[T] =
-  result.isImmediate = true
-  result.value = value
+  Future[T](isImmediate: true, value: value)
 
 proc immediateFuture*(): Future[void] =
-  result.isImmediate = true
+  Future[void](isImmediate: true)
 
 proc immediateError*[T](value: string): Future[T] =
   let self = newCompleter[T]()
@@ -133,9 +134,10 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
     else:
       onSuccess(f.value)
     return
+
   let c = f.completer
+  c.consumed = true
   if c.isFinished:
-    c.consumed = true
     if c.isSuccess:
       when T is void:
         onSuccess()

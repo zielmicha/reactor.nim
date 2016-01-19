@@ -25,8 +25,7 @@ proc resolveAddress*(hostname: string): Future[seq[IpAddress]] =
     completer: Completer[seq[IpAddress]]
     hostname: string
 
-  let state = new(State)
-  state.completer = newCompleter[seq[IpAddress]]()
+  let state = State(completer: newCompleter[seq[IpAddress]]())
   state.hostname = hostname
 
   GC_ref(state)

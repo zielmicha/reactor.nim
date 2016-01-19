@@ -12,8 +12,10 @@ proc iterFuture[T](f: Future[T]): AsyncIterator =
 
 template awaitInIterator*(body: expr): expr =
   let fut = body
+  assert fut.isImmediate or fut.completer != nil, "nil passed to await"
   if not fut.isCompleted:
     yield iterFuture(fut)
+
   if not (fut.isImmediate or fut.completer.isSuccess):
     fut.completer.consumed = true
     asyncProcCompleter.completeError(fut.completer.error)
@@ -21,6 +23,9 @@ template awaitInIterator*(body: expr): expr =
 
   when not (fut is Future[void]):
     fut.get
+  else:
+    if not fut.isImmediate:
+      fut.completer.consumed = true
 
 template await*(body): expr =
   {.error: "await outside of an async proc".}

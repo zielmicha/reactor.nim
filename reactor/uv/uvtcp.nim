@@ -93,10 +93,9 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
     sockaddress: ptr SockAddr
     errMsg: string
 
-  let state = new(State)
+  let state = State(completer: newCompleter[TcpConnection]())
   GC_ref(state)
   connectReq.data = cast[pointer](state)
-  state.completer = newCompleter[TcpConnection]()
   state.sockaddress = cast[ptr SockAddr](alloc0(sizeof(Sockaddr_storage)))
   ipaddrToSockaddr(state.sockaddress, host, port)
 

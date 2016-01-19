@@ -99,6 +99,8 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
     self.onSendReady.removeListener sendListenerId
     self.onRecvClose.removeListener closeListenerId)
 
+  return completer.getFuture
+
 proc provide*[T](self: Provider[T], item: T): Future[void] =
   ## Provides a signle. Returns Future that finishes when the item
   ## is pushed into queue.

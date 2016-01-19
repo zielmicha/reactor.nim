@@ -38,7 +38,7 @@ proc readChunksPrefixed*(self: Stream[byte]): Stream[string] =
   return stream
 
 proc write*[T](self: Provider[T], data: string): Future[void] =
-  self.provideAll(data)
+  return self.provideAll(data)
 
 proc writeItem*[T](self: Provider[byte], item: T, endian=bigEndian): Future[void] =
   return self.write(pack(item, endian))
