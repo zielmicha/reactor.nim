@@ -6,3 +6,4 @@ TODO
 * close UV streams
 * stacktraces in futures
 * support asyncfor
+* add variant of `map` for function returning `Future`s

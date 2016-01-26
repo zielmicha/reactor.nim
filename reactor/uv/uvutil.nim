@@ -18,6 +18,9 @@ proc newUvHandle*(`type`: uv_handle_type): pointer =
 proc freeUv*(t: ptr) =
   freeShared(t)
 
+proc freeUvMemory*(t: ptr uv_handle_t) {.cdecl.} =
+  freeUv(t)
+
 var threadLoopId  {.threadvar.}: int
 var globalLoopId: int
 

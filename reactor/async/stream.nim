@@ -79,7 +79,14 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
 
   self.checkProvide()
 
-  var offset = self.provideSome(asByteView(data))
+  when type(data) is string:
+    var data = data
+    let dataView = asByteView(data)
+  else:
+    var data = data
+    let dataView = seqView(data)
+
+  var offset = self.provideSome(dataView)
   if offset == data.len:
     return immediateFuture()
 
@@ -88,7 +95,7 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
   var closeListenerId: CallbackId
 
   sendListenerId = self.onSendReady.addListener(proc() =
-    offset = self.provideSome(asByteView(data).slice(offset))
+    offset = self.provideSome(dataView.slice(offset))
     if offset == data.len:
       completer.complete()
       self.onSendReady.removeListener sendListenerId
@@ -269,7 +276,7 @@ proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(sou
           doAssert(false)
       else:
         let doSend = target.freeBufferSize()
-        var buffer = newSeq[R](view.len)
+        var buffer: seq[R]
         function(view, buffer)
         didSend = target.provideSome(buffer.seqView)
 
@@ -287,8 +294,16 @@ proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(sou
 
 proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
   return proc(source: ConstView[T], target: var seq[R]) =
+    target = newSeq[R](source.len)
     for i in 0..<source.len:
       target[i] = f(source[i])
+
+proc flatMapperFunc[T, R](f: (proc(x: T): seq[R])): auto =
+  return proc(source: ConstView[T], target: var seq[R]) =
+    target = @[]
+    for i in 0..<source.len:
+      for item in f(source[i]):
+        target.add item
 
 proc pipe*[T, R](self: Stream[T], target: Provider[R], function: (proc(x: T): R)) =
   pipeChunks(self, target, mapperFunc(function))
@@ -299,6 +314,11 @@ proc pipe*[T](self: Stream[T], target: Provider[T]) =
 proc mapChunks*[T, R](self: Stream[T], function: (proc(source: ConstView[T], target: var seq[R]))): Stream[R] =
   let (rstream, rprovider) = newStreamProviderPair[R]()
   pipeChunks(self, rprovider, function)
+  return rstream
+
+proc flatMap*[T, R](self: Stream[T], function: (proc(x: T): seq[R])): Stream[R] =
+  let (rstream, rprovider) = newStreamProviderPair[R]()
+  pipeChunks(self, rprovider, flatMapperFunc(function))
   return rstream
 
 proc map*[T, R](self: Stream[T], function: (proc(x: T): R)): Stream[R] =

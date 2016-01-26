@@ -46,7 +46,7 @@ proc pack*[T](v: T, endian=bigEndian): string {.inline.} =
   convertEndian(sizeof(T), addr result[0], unsafeAddr v)
 
 proc unpack*[T](v: string, t: typedesc[T], endian=bigEndian): T {.inline.} =
-  assert v.len == sizeof(T)
+  assert v.len >= sizeof(T)
   convertEndian(sizeof(T), addr result, unsafeAddr v[0])
 
 #proc unpack*[T](v: array, t: typedesc[T], endian=bigEndian): T {.inline.} =

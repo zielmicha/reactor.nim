@@ -110,3 +110,16 @@ macro asyncFor*(iterClause: expr, body: expr): stmt =
   ##     echo "piping ", item
   ##     await dst.provide(item)
   ## ```
+  if iterClause.kind != nnkInfix or iterClause[0] != newIdentNode(!"in"):
+    error("expected `x in y` after for")
+
+  let coll = iterClause[2]
+  let itemName = iterClause[1]
+
+  let newBody = quote do:
+    let collection = `coll`
+    while true:
+      let `itemName` = awaitInIterator receive(collection)
+      `body`
+
+  newBody

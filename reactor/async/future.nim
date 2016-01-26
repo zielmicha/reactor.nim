@@ -68,7 +68,10 @@ proc newCompleter*[T](): Completer[T] =
     result.stackTrace = getStackTrace()
 
 proc immediateFuture*[T](value: T): Future[T] =
-  Future[T](isImmediate: true, value: value)
+  when T is void:
+    Future[T](isImmediate: true)
+  else:
+    Future[T](isImmediate: true, value: value)
 
 proc immediateFuture*(): Future[void] =
   Future[void](isImmediate: true)
@@ -161,6 +164,16 @@ proc ignoreResult*[T](f: Future[T]): Future[Bottom] =
 
   return completer.getFuture
 
+proc ignoreError*[Exc](f: Future[void], kind: typedesc[Exc]): Future[void] =
+  let completer = newCompleter[void]()
+
+  onSuccessOrError[void](f, onSuccess=(proc() = complete(completer)),
+                         onError=proc(t: ref Exception) =
+                                if t of kind: complete(completer)
+                                else: completer.completeError(t))
+
+  return completer.getFuture
+
 converter ignoreVoidResult*(f: Future[void]): Future[Bottom] =
   ignoreResult(f)
 
@@ -187,7 +200,9 @@ proc thenNowImpl[T, R](f: Future[T], function: (proc(t:T):R)): auto =
 
 proc completeFrom*[T](c: Completer[T], f: Future[T]) =
   onSuccessOrError[T](f,
-                      onSuccess=proc(t: T) = complete[T](c, t),
+                      onSuccess=proc(t: T) =
+                        when T is void: complete[T](c)
+                        else: complete[T](c, t),
                       onError=proc(t: ref Exception) = completeError[T](c, t))
 
 proc thenChainImpl[T, R](f: Future[T], function: (proc(t:T): Future[R])): Future[R] =
@@ -207,7 +222,10 @@ proc declval[R](r: typedesc[R]): R =
 
 proc thenWrapper[T, R](f: Future[T], function: (proc(t:T):R)): auto =
   when R is Future:
-    return thenChainImpl[T, type(declval(R).value)](f, function)
+    when R is Future[void]:
+      return thenChainImpl[T, void](f, function)
+    else:
+      return thenChainImpl[T, type(declval(R).value)](f, function)
   else:
     return thenNowImpl[T, R](f, function)
 
@@ -216,6 +234,9 @@ proc then*[T](f: Future[void], function: (proc(): T)): auto =
 
 proc then*[T](f: Future[T], function: (proc(t:T))): auto =
   return thenWrapper[T, void](f, function)
+
+proc then*(f: Future[void], function: (proc())): auto =
+  return thenWrapper[void, void](f, function)
 
 proc then*[T, R](f: Future[T], function: (proc(t:T): R)): auto =
   return thenWrapper[T, R](f, function)
