@@ -64,11 +64,11 @@ proc provideSome*[T](self: Provider[T], data: ConstView[T]): int =
   ## Provides some items pointed by view `data`. Returns how many items
   ## were actualy provided.
   self.checkProvide()
-  let doPush = min(self.freeBufferSize, data.len)
+  let doPush = max(min(self.freeBufferSize, data.len), 0)
   if doPush != 0 and sself.queue.len == 0:
     sself.onRecvReady.callListener()
 
-  sself.queue.pushBackMany(data)
+  sself.queue.pushBackMany(data.slice(0, doPush))
   return doPush
 
 proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
@@ -133,6 +133,7 @@ proc provide*[T](self: Provider[T], item: T): Future[void] =
     self.onSendReady.removeListener sendListenerId
     self.onRecvClose.removeListener closeListenerId)
 
+  return completer.getFuture
 
 proc sendClose*(self: Provider, exc: ref Exception) =
   ## Closes the provider -- signals that no more messages will be provided.
@@ -213,9 +214,9 @@ proc receive*[T](self: Stream[T]): Future[T] =
   ## Pop an item from the stream.
   return self.receiveAll(1).then((x: seq[T]) => x[0])
 
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[int])): Future[Bottom] =
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[int])): Future[void] =
   ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
-  let completer = newCompleter[Bottom]()
+  let completer = newCompleter[void]()
 
   var onRecvContinue: (proc(n: int))
   var recvListenerId: CallbackId
@@ -244,21 +245,24 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
   recvListenerId = self.onRecvReady.addListener(onRecvReady)
 
   self.onSendClose.addListener proc(exc: ref Exception) =
-    completer.completeError(exc)
+    if exc == JustClose:
+      completer.complete()
+    else:
+      completer.completeError(exc)
 
-  let f: Future[Bottom] = completer.getFuture
+  let f: Future[void] = completer.getFuture
   return f
 
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Future[Bottom] =
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Future[void] =
   self.forEachChunk proc(x: ConstView[T]): Future[int] =
     function(x)
     return immediateFuture(x.len)
 
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[Bottom] =
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void] =
   self.forEachChunk proc(x: ConstView[T]) =
     function(x.copyAsSeq)
 
-proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[Bottom] =
+proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] =
   self.forEachChunk proc(x: ConstView[T]) =
     for i in 0..<x.len:
       function(x[i])

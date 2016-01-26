@@ -89,6 +89,9 @@ proc immediateError*[T](value: ref Exception): Future[T] =
 proc isCompleted*(self: Future): bool =
   return self.isImmediate or self.completer.isFinished
 
+proc isSuccess*(self: Future): bool =
+  return self.isImmediate or (self.completer.isFinished and self.completer.isSuccess)
+
 proc get*[T](self: Future[T]): T =
   if self.isImmediate:
     when T is not void:
@@ -101,6 +104,10 @@ proc get*[T](self: Future[T]): T =
         return self.completer.result
     else:
       raise self.completer.error
+
+proc getError*[T](self: Future[T]): ref Exception =
+  self.completer.consumed = true
+  return self.completer.error
 
 proc complete*[T](self: Completer[T], x: T) =
   assert (not self.isFinished)

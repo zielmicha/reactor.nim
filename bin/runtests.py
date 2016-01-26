@@ -25,7 +25,7 @@ for name in glob.glob('tests/*.nim'):
     bin_name = name.rsplit('.', 1)[0]
     got_output = subprocess.check_output([bin_name], stderr=subprocess.STDOUT).strip()
     if got_output != expected_output:
-        print('Failure.')
+        print(name, 'failure')
         print('Expected:')
         print(expected_output)
         print('Got:')

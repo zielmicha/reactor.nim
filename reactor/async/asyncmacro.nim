@@ -10,22 +10,35 @@ proc iterFuture[T](f: Future[T]): AsyncIterator =
     completer.callback = proc(data: RootRef, future: Completer[T]) =
       cont()
 
-template awaitInIterator*(body: expr): expr =
+template stopAsync*(): expr =
+  # we will never be called again
+  yield AsyncIterator(callback: nil)
+
+template awaitInIterator*(body: expr, errorFunc: expr): expr =
   let fut = body
   assert fut.isImmediate or fut.completer != nil, "nil passed to await"
   if not fut.isCompleted:
     yield iterFuture(fut)
 
-  if not (fut.isImmediate or fut.completer.isSuccess):
-    fut.completer.consumed = true
-    asyncProcCompleter.completeError(fut.completer.error)
-    yield AsyncIterator(callback: nil) # we will never be called again
+  if not fut.isSuccess:
+    let err = fut.getError
+    errorFunc(err)
+    stopAsync()
 
   when not (fut is Future[void]):
     fut.get
   else:
     if not fut.isImmediate:
       fut.completer.consumed = true
+
+template tryAwait*(body: expr): expr =
+  ## Waits for future completion and returns it.
+  let fut = body
+  assert fut.isImmediate or fut.completer != nil, "nil passed to await"
+  if not fut.isCompleted:
+    yield iterFuture(fut)
+
+  fut
 
 template await*(body): expr =
   {.error: "await outside of an async proc".}
@@ -63,36 +76,31 @@ macro async*(a): stmt =
   returnTypeNew.add newIdentNode(!"Future")
   returnTypeNew.add returnType
 
-  let asyncHeader = parseStmt("""
-template await(e: expr): expr = awaitInIterator(e)
-template asyncRaise(e: expr): expr =
-  asyncProcCompleter.completeError(e)
-  return
-template asyncReturn(e: expr): expr =
-  asyncProcCompleter.complete(e)
-  return""")
+  let completer = parseExpr("newCompleter[int]()")
+  completer[0][1] = returnType
 
-  let asyncFooter = parseStmt("""
-asyncIteratorRun(iter)
-return asyncProcCompleter.getFuture""")
+  var asyncBody = quote do:
+    let asyncProcCompleter = `completer`
 
-  let headerNext = parseStmt("let asyncProcCompleter = newCompleter[int]()")[0]
-  headerNext[0][2][0][1] = returnType
-  asyncHeader.add headerNext
+    template await(e: expr): expr =
+      awaitInIterator(e, asyncProcCompleter.completeError)
 
-  var asyncBodyTxt = """let iter = iterator(): AsyncIterator {.closure.} =
-    discard
-    """
-  if returnType == newIdentNode(!"void"):
-    asyncBodyTxt &= "asyncProcCompleter.complete()"
-  else:
-    asyncBodyTxt &= "asyncProcCompleter.completeError(\"missing asyncReturn\")"
-  let asyncBody = parseStmt(asyncBodyTxt)[0]
+    template asyncRaise(e: expr): expr =
+      asyncProcCompleter.completeError(e)
+      return
+    template asyncReturn(e: expr): expr =
+      asyncProcCompleter.complete(e)
+      return
 
-  asyncBody[0][2][6][0] = body
+    let iter = iterator(): AsyncIterator {.closure.} =
+      `body`
+      when `returnType` is void:
+        asyncProcCompleter.complete()
+      else:
+        asyncProcCompleter.completeError("missing asyncReturn")
 
-  asyncHeader.add(asyncBody)
-  asyncHeader.add(asyncFooter)
+    asyncIteratorRun(iter)
+    return asyncProcCompleter.getFuture
 
   result = newProc(procName)
   result[3] = newNimNode(nnkFormalParams)
@@ -100,7 +108,7 @@ return asyncProcCompleter.getFuture""")
   for param in params:
     result[3].add param
   result[4] = pragmas
-  result[6] = asyncHeader
+  result[6] = asyncBody
 
 macro asyncFor*(iterClause: expr, body: expr): stmt =
   ## An asynchronous version of `for` that works on Streams. Example:
@@ -117,9 +125,66 @@ macro asyncFor*(iterClause: expr, body: expr): stmt =
   let itemName = iterClause[1]
 
   let newBody = quote do:
+    mixin await
     let collection = `coll`
     while true:
-      let `itemName` = awaitInIterator receive(collection)
+      let fut = tryAwait receive(collection)
+      if not fut.isSuccess and fut.getError() == JustClose:
+        break
+      let `itemName` = fut.get
       `body`
 
   newBody
+
+macro asyncIterator*(a): stmt =
+  ## An iterator that produces elements asynchronously. Example:
+  ## ```
+  ## proc intGenerator(): Stream[int] {.asyncIterator.} =
+  ##   var i = 0;
+  ##   while true:
+  ##      asyncYield i
+  ##      i += 1
+  ## ```
+
+  let procName = a[0]
+  let allParams = toSeq(a[3].items)
+  let params = if allParams.len > 0: allParams[1..<allParams.len] else: @[]
+  let pragmas = a[4]
+  let body = a[6]
+  let returnTypeFull = a[3][0]
+
+  if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Stream"):
+    error("invalid return type from async iterator (expected Stream[T])")
+
+  let returnType = returnTypeFull[1]
+  let streamProviderPair = parseExpr("newStreamProviderPair[int](bufferSize=32)")
+  streamProviderPair[0][1] = returnType
+
+  var asyncBody = quote do:
+    let (asyncStream, asyncProvider) = `streamProviderPair`
+
+    template await(e: expr): expr =
+      awaitInIterator(e, asyncProvider.sendClose)
+
+    template asyncRaise(e: expr): expr =
+      asyncProvider.sendClose(e)
+      return
+
+    template asyncYield(e: expr): expr =
+      mixin await
+      await asyncProvider.provide(e)
+
+    let iter = iterator(): AsyncIterator {.closure.} =
+      `body`
+      asyncRaise(JustClose)
+
+    asyncIteratorRun(iter)
+    return asyncStream
+
+  result = newProc(procName)
+  result[3] = newNimNode(nnkFormalParams)
+  result[3].add returnTypeFull
+  for param in params:
+    result[3].add param
+  result[4] = pragmas
+  result[6] = asyncBody
