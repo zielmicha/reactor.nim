@@ -10,9 +10,9 @@ proc nothing*() {.procvar.} = return
 proc nothing1*[T](t: T) {.procvar.} = return
 
 proc baseBufferSizeFor*[T](v: typedesc[T]): int =
-  when sizeof(T) > 1024:
+  when v is ref or v is seq or v is string or v is object:
     return 1
-  elif v is ref or v is seq or v is string:
+  elif sizeof(T) > 1024:
     return 1
   else:
     return int(1024 / sizeof(v))
@@ -46,8 +46,18 @@ proc pack*[T](v: T, endian=bigEndian): string {.inline.} =
   convertEndian(sizeof(T), addr result[0], unsafeAddr v)
 
 proc unpack*[T](v: string, t: typedesc[T], endian=bigEndian): T {.inline.} =
-  assert v.len >= sizeof(T)
-  convertEndian(sizeof(T), addr result, unsafeAddr v[0])
+  if v.len < sizeof(T):
+    raise newException(ValueError, "buffer too small")
+  convertEndian(sizeof(T), addr result, unsafeAddr v[0], endian)
+
+proc unpackStruct*[T](v: string, t: typedesc[T]): T {.inline.} =
+  if v.len < sizeof(T):
+    raise newException(ValueError, "buffer too small")
+  copyMem(addr result, unsafeAddr v[0], sizeof(T))
+
+proc packStruct*[T](t: T): string {.inline.} =
+  result = newString(sizeof(t))
+  copyMem(addr result[0], unsafeAddr t, sizeof(T))
 
 #proc unpack*[T](v: array, t: typedesc[T], endian=bigEndian): T {.inline.} =
 #  static: assert v.high - v.low + 1 == sizeof(T)

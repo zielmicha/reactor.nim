@@ -23,6 +23,9 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
   if nread < 0:
     self.inputProvider.sendClose(uvError(nread, "read stream"))
   else:
+    if self.inputProvider.isSendClosed:
+      return
+
     assert nread <= self.buffer.len
     var data = self.buffer[0..<nread]
     data.shallow

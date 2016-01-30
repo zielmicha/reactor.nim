@@ -60,6 +60,9 @@ proc checkProvide(self: Provider) =
   if sself.sendClosed:
     raise newException(Exception, "provide on closed stream")
 
+proc isSendClosed*(self: Provider): bool =
+  sself.sendClosed
+
 proc provideSome*[T](self: Provider[T], data: ConstView[T]): int =
   ## Provides some items pointed by view `data`. Returns how many items
   ## were actualy provided.
@@ -218,6 +221,8 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
   ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
   let completer = newCompleter[void]()
 
+  echo "forEach"
+
   var onRecvContinue: (proc(n: int))
   var recvListenerId: CallbackId
   var closeListenerId: CallbackId
@@ -249,6 +254,8 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
       completer.complete()
     else:
       completer.completeError(exc)
+
+  onRecvReady()
 
   let f: Future[void] = completer.getFuture
   return f
@@ -313,7 +320,7 @@ proc pipe*[T, R](self: Stream[T], target: Provider[R], function: (proc(x: T): R)
   pipeChunks(self, target, mapperFunc(function))
 
 proc pipe*[T](self: Stream[T], target: Provider[T]) =
-  pipeChunks(self, target, identity)
+  pipeChunks(self, target, nil)
 
 proc mapChunks*[T, R](self: Stream[T], function: (proc(source: ConstView[T], target: var seq[R]))): Stream[R] =
   let (rstream, rprovider) = newStreamProviderPair[R]()

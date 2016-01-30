@@ -84,13 +84,18 @@ macro async*(a): stmt =
 
     template await(e: expr): expr =
       awaitInIterator(e, asyncProcCompleter.completeError)
-
     template asyncRaise(e: expr): expr =
       asyncProcCompleter.completeError(e)
       return
-    template asyncReturn(e: expr): expr =
-      asyncProcCompleter.complete(e)
-      return
+
+    when asyncProcCompleter is Completer[void]:
+      template asyncReturn(): expr =
+        asyncProcCompleter.complete()
+        return
+    else:
+      template asyncReturn(e: expr): expr =
+        asyncProcCompleter.complete(e)
+        return
 
     let iter = iterator(): AsyncIterator {.closure.} =
       `body`
@@ -125,12 +130,15 @@ macro asyncFor*(iterClause: expr, body: expr): stmt =
   let itemName = iterClause[1]
 
   let newBody = quote do:
-    mixin await
     let collection = `coll`
     while true:
       let fut = tryAwait receive(collection)
-      if not fut.isSuccess and fut.getError() == JustClose:
-        break
+      if not fut.isSuccess:
+        let err = fut.getError()
+        if err == JustClose:
+          break
+        else:
+          asyncRaise err
       let `itemName` = fut.get
       `body`
 

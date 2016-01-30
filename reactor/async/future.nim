@@ -216,7 +216,10 @@ proc thenChainImpl[T, R](f: Future[T], function: (proc(t:T): Future[R])): Future
   let completer = newCompleter[R]()
 
   proc onSuccess(t: T) =
-    var newFut = function(t)
+    when T is void:
+      var newFut = function()
+    else:
+      var newFut = function(t)
     completeFrom[R](completer, newFut)
 
   onSuccessOrError[T](f, onSuccess=onSuccess,
@@ -249,7 +252,7 @@ proc then*[T, R](f: Future[T], function: (proc(t:T): R)): auto =
   return thenWrapper[T, R](f, function)
 
 proc ignoreFailCb(t: ref Exception) =
-  echo "Error in ignored future: " & t.msg
+  stderr.writeLine("Error in ignored future: " & t.msg)
 
 proc ignore*(f: Future[void]) =
   onSuccessOrError[void](f,

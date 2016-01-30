@@ -1,9 +1,17 @@
-FIXME
-* await procs may cause stack overflow in some situations
+### FIXME
+* close logic in streams is broken (may lose trailing messages)
+  * remove onClose and send readiness event if stream is empty and set close flag (and check it in consumers!)
+    * does this work is presence of multiple consumers?
+* async procs may cause stack overflow in some situations
 
-TODO
+### TODO
 * optimize `then` for immediate futures
 * close UV streams
 * stacktraces in futures
-* support asyncfor
 * add variant of `map` for function returning `Future`s
+* `TaskQueue` for cancellation and concurrency limitation
+
+### TODO (asyncmacro)
+* change `return` to `asyncReturn`, `yield` to `asyncYield`
+* add try-except support
+* (possibly) catch all other exceptions and convert to async failure
