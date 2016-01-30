@@ -221,8 +221,6 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[
   ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
   let completer = newCompleter[void]()
 
-  echo "forEach"
-
   var onRecvContinue: (proc(n: int))
   var recvListenerId: CallbackId
   var closeListenerId: CallbackId
