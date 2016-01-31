@@ -58,7 +58,8 @@ proc `onSendReady`*[T](self: Provider[T]): auto =
 
 proc checkProvide(self: Provider) =
   if sself.sendClosed:
-    raise newException(Exception, "provide on closed stream")
+    # closes are broken, disable this for now
+    discard #raise newException(Exception, "provide on closed stream")
 
 proc isSendClosed*(self: Provider): bool =
   sself.sendClosed
@@ -98,7 +99,7 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
   var closeListenerId: CallbackId
 
   sendListenerId = self.onSendReady.addListener(proc() =
-    offset = self.provideSome(dataView.slice(offset))
+    offset += self.provideSome(dataView.slice(offset))
     if offset == data.len:
       completer.complete()
       self.onSendReady.removeListener sendListenerId

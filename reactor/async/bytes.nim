@@ -19,7 +19,7 @@ proc readItem*[T](self: Stream[byte], `type`: typedesc[T], endian=bigEndian): Fu
 
 proc readChunkPrefixed*(self: Stream[byte]): Future[string] {.async.} =
   let length = await self.readItem(uint32)
-  if length > uint32(16 * 1024 * 1024):
+  if length > uint32(128 * 1024 * 1024):
     asyncRaise("length too big")
   asyncReturn(await self.read(length.int))
 

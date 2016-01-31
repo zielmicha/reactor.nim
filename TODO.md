@@ -3,6 +3,7 @@
   * remove onClose and send readiness event if stream is empty and set close flag (and check it in consumers!)
     * does this work is presence of multiple consumers?
 * async procs may cause stack overflow in some situations
+* queue chunk size is always 4096
 
 ### TODO
 * optimize `then` for immediate futures
