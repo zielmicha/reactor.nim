@@ -24,10 +24,14 @@ proc freeUvMemory*(t: ptr uv_handle_t) {.cdecl.} =
 var threadLoopId  {.threadvar.}: int
 var globalLoopId: int
 
+proc init() =
+  signal(SIGPIPE, SIG_IGN)
+
 proc getThreadUvLoop*(): ptr uv_loop_t =
   # TODO: support multithreading
   # for now, check if running on main thread
   if globalLoopId == 0:
+    init()
     globalLoopId = 1
     threadLoopId = 1
   assert threadLoopId == globalLoopId
