@@ -52,6 +52,9 @@ proc asyncIteratorRun*(it: (iterator(): AsyncIterator)) =
     asyncIter.callback(proc() = asyncIteratorRun(it))
 
 proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
+  if n.kind in RoutineNodes:
+    return n
+
   if n.kind == nnkReturnStmt:
     return newCall(newIdentNode(!"asyncReturn"), n[0])
 

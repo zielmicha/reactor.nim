@@ -11,6 +11,12 @@ Error in ignored future: boom!"""
 import reactor/async, reactor/loop
 
 proc add5(num: Future[int]): Future[int] {.async.} =
+  proc somelambda(): int =
+    # check if this "return" is not replaced
+    return 5
+
+  assert somelambda() == 5
+
   echo "start add5"
   let a = await immediateFuture(5)
   echo "got a ", a
