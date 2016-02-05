@@ -51,6 +51,15 @@ proc asyncIteratorRun*(it: (iterator(): AsyncIterator)) =
   if asyncIter.callback != nil:
     asyncIter.callback(proc() = asyncIteratorRun(it))
 
+proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
+  if n.kind == nnkReturnStmt:
+    return newCall(newIdentNode(!"asyncReturn"), n[0])
+
+  let node = n.copyNimTree
+  for i in 0..<node.len:
+    node[i] = transformAsyncBody(n[i])
+  return node
+
 macro async*(a): stmt =
   ## `async` macro. Enables you to write asynchronous code in a similar manner to synchronous code.
   ##
@@ -64,7 +73,7 @@ macro async*(a): stmt =
   let allParams = toSeq(a[3].items)
   let params = if allParams.len > 0: allParams[1..<allParams.len] else: @[]
   let pragmas = a[4]
-  let body = a[6]
+  let body = transformAsyncBody(a[6])
   let returnTypeFull = a[3][0]
 
   if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future")):

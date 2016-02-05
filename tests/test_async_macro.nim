@@ -16,10 +16,10 @@ proc add5(num: Future[int]): Future[int] {.async.} =
   echo "got a ", a
   let b = await num
   echo "got b ", b
-  asyncReturn a + b
+  return a + b
 
 proc add5bis(s: Future[int]): Future[int] {.async.} =
-  asyncReturn ((await s) + 5)
+  return (await s) + 5
 
 proc foo() {.async.} =
   discard
