@@ -108,6 +108,7 @@ macro async*(a): stmt =
     return asyncProcCompleter.getFuture
 
   result = newProc(procName)
+  result[2] = a[2]
   result[3] = newNimNode(nnkFormalParams)
   result[3].add returnTypeNew
   for param in params:
@@ -115,7 +116,7 @@ macro async*(a): stmt =
   result[4] = pragmas
   result[6] = asyncBody
 
-macro asyncFor*(iterClause: expr, body: expr): stmt =
+macro asyncFor*(iterClause: expr, body: expr): stmt {.immediate.} =
   ## An asynchronous version of `for` that works on Streams. Example:
   ## ```
   ## proc simplePipe(src: Stream[int], dst: Provider[int]) {.async.} =

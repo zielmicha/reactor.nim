@@ -3,16 +3,8 @@ type
   ByteStream* = Stream[byte]
   ByteProvider* = Provider[byte]
 
-proc forEachChunk*(self: Stream[byte], function: (proc(x: string))): Future[Bottom] =
-  self.forEachChunk proc(x: ConstView[byte]) =
-    function(x.copyAsString)
-
-proc forEachChunk*(self: Stream[byte], function: (proc(x: string): Future[void])): Future[Bottom] =
-  self.forEachChunk proc(x: ConstView[byte]): Future[int] =
-    function(x.copyAsString).then(proc(): int = x.len)
-
 proc read*(self: Stream[byte], count: int): Future[string] =
-  self.receiveAll(count, string)
+  self.receiveChunk(count, count, string)
 
 proc readItem*[T](self: Stream[byte], `type`: typedesc[T], endian=bigEndian): Future[T] =
   return self.read(sizeof(T)).then(proc(x: string): T = unpack(x, T, endian))

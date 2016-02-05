@@ -6,10 +6,10 @@ type
 
     onRecvReady: Event[void]
     onSendReady: Event[void]
-    onRecvClose: Event[ref Exception]
-    onSendClose: Event[ref Exception]
     sendClosed: bool
     recvClosed: bool
+    sendCloseException: ref Exception
+    recvCloseException: ref Exception
 
   Provider* {.borrow: `.`.}[T]  = distinct Stream[T]
 
@@ -41,14 +41,6 @@ proc newStreamProviderPair*[T](bufferSize=0): tuple[stream: Stream[T], provider:
 
   newEvent(result.stream.onRecvReady)
   newEvent(result.stream.onSendReady)
-  newEvent(result.stream.onRecvClose)
-  newEvent(result.stream.onSendClose)
-
-proc `onSendClose`*[T](self: Stream[T]): auto =
-  self.onSendClose
-
-proc `onRecvClose`*[T](self: Provider[T]): auto =
-  sself.onSendClose
 
 proc `onRecvReady`*[T](self: Stream[T]): auto =
   self.onRecvReady
@@ -81,7 +73,11 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
   when type(data) is string and not (T is byte):
     {.error: "writing strings only supported for byte streams".}
 
-  self.checkProvide()
+  if sself.sendClosed:
+    return immediateError[void]("send side closed")
+
+  if sself.recvClosed:
+    return immediateError[void](sself.recvCloseException)
 
   when type(data) is string:
     var data = data
@@ -96,19 +92,21 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
 
   let completer = newCompleter[void]()
   var sendListenerId: CallbackId
-  var closeListenerId: CallbackId
 
   sendListenerId = self.onSendReady.addListener(proc() =
+    if sself.sendClosed:
+      completer.completeError("send side closed")
+      self.onSendReady.removeListener sendListenerId
+      return
+    if sself.recvClosed:
+      completer.completeError(sself.recvCloseException)
+      self.onSendReady.removeListener sendListenerId
+      return
+
     offset += self.provideSome(dataView.slice(offset))
     if offset == data.len:
       completer.complete()
-      self.onSendReady.removeListener sendListenerId
-      self.onRecvClose.removeListener closeListenerId)
-
-  closeListenerId = self.onRecvClose.addListener(proc(err: ref Exception) =
-    completer.completeError(err)
-    self.onSendReady.removeListener sendListenerId
-    self.onRecvClose.removeListener closeListenerId)
+      self.onSendReady.removeListener sendListenerId)
 
   return completer.getFuture
 
@@ -119,23 +117,25 @@ proc provide*[T](self: Provider[T], item: T): Future[void] =
   self.checkProvide()
 
   var item = item
+
+  if sself.recvClosed:
+    return immediateError[void](sself.recvCloseException)
+
   if self.provideSome(singleItemView(item)) == 1:
     return immediateFuture()
 
   let completer = newCompleter[void]()
   var sendListenerId: CallbackId
-  var closeListenerId: CallbackId
 
   sendListenerId = self.onSendReady.addListener(proc() =
+    if sself.recvClosed:
+      completer.completeError(sself.recvCloseException)
+      self.onSendReady.removeListener sendListenerId
+      return
+
     if self.provideSome(singleItemView(item)) == 1:
       completer.complete()
-      self.onSendReady.removeListener sendListenerId
-      self.onRecvClose.removeListener closeListenerId)
-
-  closeListenerId = self.onRecvClose.addListener(proc(err: ref Exception) =
-    completer.completeError(err)
-    self.onSendReady.removeListener sendListenerId
-    self.onRecvClose.removeListener closeListenerId)
+      self.onSendReady.removeListener sendListenerId)
 
   return completer.getFuture
 
@@ -143,14 +143,15 @@ proc sendClose*(self: Provider, exc: ref Exception) =
   ## Closes the provider -- signals that no more messages will be provided.
   if sself.sendClosed: return
   sself.sendClosed = true
-  sself.onSendClose.callListener(exc)
+  sself.sendCloseException = exc
+  sself.onRecvReady.callListener()
 
 proc recvClose*[T](self: Stream[T], exc: ref Exception) =
   ## Closes the stream -- signals that no more messages will be received.
   if self.recvClosed: return
   self.recvClosed = true
-  self.onRecvReady.removeAllListeners
-  self.onRecvClose.callListener(exc)
+  self.recvCloseException = exc
+  self.onSendReady.callListener()
 
 proc close*[T](self: Pipe[T], exc: ref Exception) =
   self.input.recvClose(exc)
@@ -184,12 +185,22 @@ proc receiveSomeInto*[T](self: Stream[T], target: View[T]): int =
     offset += doRecv
   return offset
 
-proc receiveAll[T, Ret](self: Stream[T], n: int, returnType: typedesc[Ret]): Future[Ret] =
-  var res: Ret = when Ret is seq: newSeq[T](n) else: newString(n)
+proc receiveChunk[T, Ret](self: Stream[T], minn: int, maxn: int, returnType: typedesc[Ret]): Future[Ret] =
+  var res: Ret = when Ret is seq: newSeq[T](maxn) else: newString(maxn)
 
   var offset = self.receiveSomeInto(res.asView)
-  if offset == res.len:
-    return immediateFuture(res)
+
+  template getResult: expr =
+    if offset == res.len:
+      res
+    else:
+      res[0..<offset]
+
+  if offset >= minn:
+    return immediateFuture(getResult())
+
+  if self.sendClosed:
+    return immediateError[Ret](self.sendCloseException)
 
   let completer = newCompleter[Ret]()
 
@@ -198,80 +209,27 @@ proc receiveAll[T, Ret](self: Stream[T], n: int, returnType: typedesc[Ret]): Fut
 
   recvListenerId = self.onRecvReady.addListener(proc() =
     offset += self.receiveSomeInto(res.asView.slice(offset))
-    if offset == res.len:
-      completer.complete(res)
+    if offset >= minn:
+      completer.complete(getResult())
       self.onRecvReady.removeListener recvListenerId
-      self.onSendClose.removeListener closeListenerId)
-
-  closeListenerId = self.onSendClose.addListener(proc(err: ref Exception) =
-    completer.completeError(err)
-    self.onRecvReady.removeListener recvListenerId
-    self.onSendClose.removeListener closeListenerId)
+      return
+    if self.sendClosed:
+      completer.completeError(self.sendCloseException)
+      self.onRecvReady.removeListener recvListenerId)
 
   return completer.getFuture
 
-proc receiveAll[T](self: Stream[T], n: int): Future[seq[T]] =
+proc receiveSome*[T](self: Stream[T], n: int): Future[seq[T]] =
   ## Pops `n` items from the stream.
-  receiveAll(self, n, seq[T])
+  receiveChunk(self, 1, n, seq[T])
+
+proc receiveAll*[T](self: Stream[T], n: int): Future[seq[T]] =
+  ## Pops `n` items from the stream.
+  receiveChunk(self, n, n, seq[T])
 
 proc receive*[T](self: Stream[T]): Future[T] =
   ## Pop an item from the stream.
   return self.receiveAll(1).then((x: seq[T]) => x[0])
-
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]): Future[int])): Future[void] =
-  ## Read the stream and execute `function` for every incoming sequence of items. The function should return the number of items that were consumed.
-  let completer = newCompleter[void]()
-
-  var onRecvContinue: (proc(n: int))
-  var recvListenerId: CallbackId
-  var closeListenerId: CallbackId
-
-  var onRecvReady = proc() =
-    while true: # FIXME: potentially infinite
-      let chunk = self.peekMany()
-      if chunk.len == 0:
-        break
-      let nitems = function(chunk)
-      if nitems.isCompleted:
-        self.discardItems(nitems.get)
-      else:
-        self.onRecvReady.removeListener(recvListenerId)
-        nitems.onSuccessOrError(
-          onSuccess=onRecvContinue,
-          onError=proc(exc: ref Exception) = self.recvClose(exc))
-        break
-
-  onRecvContinue = proc(n: int) =
-    self.discardItems(n)
-    recvListenerId = self.onRecvReady.addListener(onRecvReady)
-    onRecvReady()
-
-  recvListenerId = self.onRecvReady.addListener(onRecvReady)
-
-  self.onSendClose.addListener proc(exc: ref Exception) =
-    if exc == JustClose:
-      completer.complete()
-    else:
-      completer.completeError(exc)
-
-  onRecvReady()
-
-  let f: Future[void] = completer.getFuture
-  return f
-
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: ConstView[T]))): Future[void] =
-  self.forEachChunk proc(x: ConstView[T]): Future[int] =
-    function(x)
-    return immediateFuture(x.len)
-
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void] =
-  self.forEachChunk proc(x: ConstView[T]) =
-    function(x.copyAsSeq)
-
-proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] =
-  self.forEachChunk proc(x: ConstView[T]) =
-    for i in 0..<x.len:
-      function(x[i])
 
 proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil) =
   proc pipeSome() =

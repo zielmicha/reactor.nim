@@ -24,3 +24,14 @@ proc complete*[K, V](self: CompleterTable[K, V], id: K, value: V) =
     for completer in v:
       completer.complete(value)
     self.completers.del(id)
+
+# forEach
+
+proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void] {.async.} =
+  while true:
+    let data = await self.receiveSome()
+    function(data)
+
+proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] {.async.} =
+  asyncFor item in self:
+    function(item)
