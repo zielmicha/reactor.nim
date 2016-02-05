@@ -1,7 +1,30 @@
+language: c
 sudo: required
-services:
-  - docker
-before_install:
-  - docker pull yglukhov/devel
+install:
+  - sudo apt-get install -y python3-dev
+  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+  - sudo apt-get update -qq
+  - sudo apt-get install -y g++-4.8
+  - sudo ln -sf /usr/bin/gcc-4.8 /usr/bin/gcc
+  - |
+    # Download the latest release of Nim into the "nim-devel" folder
+    git clone -b devel --depth 1 git://github.com/nim-lang/nim nim-devel/
+    cd nim-devel
+    # Download the latest release of Nim's prepared C sources, for bootstrapping
+    git clone -b master --depth 1 git://github.com/nim-lang/csources csources/
+    cd csources
+    # Build C sources
+    sh build.sh
+    cd ..
+    # This concludes the first step of bootstrapping, don't need C sources anymore
+    rm -rf csources
+    # Use the executable built from C sources to compile the build tool
+    bin/nim c koch
+    # Compile Nim in release mode, using the Nim compiler we already have
+    ./koch boot -d:release
+    cd ..
+before_script:
+  # Add the 'bin' folder to PATH
+  - export PATH="nim-devel/bin:$PATH"
 script:
-  - docker run -v "$(pwd):/project" -w /project yglukhov/devel sh -c "apt-get update && apt-get install -y python3 && python3 bin/runtests.py"
+  - python3 bin/runtests.py
