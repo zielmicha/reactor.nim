@@ -1,21 +1,22 @@
-import reactor/tcp, reactor/loop, reactor/async, reactor/util, reactor/ipaddress
+# TEST.
+discard """ok
+ok"""
+import reactor/tcp, reactor/loop, reactor/async, reactor/util, reactor/ipaddress, reactor/time
 
 proc acceptConn(conn: TcpConnection) =
   echo "got connection"
-  conn.input.forEachChunk(proc(x: seq[byte]) =
-                          var x = x
-                          echo ":", x
-                          discard conn.output.provideSome(x.seqView)).
-      onError(proc(err: ref Exception) = conn.output.sendClose(err))
 
-proc main(x: TcpServer) =
-  connectTcp("127.0.0.1", 6666).then(proc(conn: TcpConnection) =
-    var s = @[byte(0), byte(0), byte(0)]
-    conn.output.writeItem(5.uint32).ignore()
-    conn.input.readItem(uint32).then(proc(x: uint32) = echo x).ignore()).ignore()
-  x.incomingConnections.forEach(acceptConn).ignore()
+proc main() {.async.} =
+  let srv = await createTcpServer(6669)
 
-let srv = createTcpServer(6666)
-srv.then(main).ignore()
+  await asyncSleep(2000)
+  let conn = await connectTcp("localhost", 6669)
+  echo "ok"
+  let client = await srv.incomingConnections.receive()
+  let data = "hello world\n"
+  await conn.output.write(data)
+  let recvData = await client.input.read(data.len)
+  assert data == recvData
+  echo "ok"
 
-runLoop()
+main().runLoop()

@@ -91,7 +91,7 @@ type
   uv_pipe_t* = pointer
   uv_tty_t* = pointer
   uv_poll_t* = uv_handle_t
-  uv_timer_t* = pointer
+  uv_timer_t* = uv_handle_t
   uv_prepare_t* = pointer
   uv_check_t* = pointer
   uv_idle_t* = uv_handle_t

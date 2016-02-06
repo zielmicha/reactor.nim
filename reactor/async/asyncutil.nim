@@ -29,7 +29,7 @@ proc complete*[K, V](self: CompleterTable[K, V], id: K, value: V) =
 
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void] {.async.} =
   while true:
-    let data = await self.receiveSome()
+    let data = await self.receiveSome(4096)
     function(data)
 
 proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] {.async.} =
