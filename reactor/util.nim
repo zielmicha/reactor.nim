@@ -69,3 +69,7 @@ proc packStruct*[T](t: T): string {.inline.} =
 #proc unpack*[T](v: array, t: typedesc[T], endian=bigEndian): T {.inline.} =
 #  static: assert v.high - v.low + 1 == sizeof(T)
 #  convertEndian(addr result, unsafeAddr v[v.low])
+
+proc newCopy*[T](t: T): ref T =
+  new(result)
+  result[] = t

@@ -52,3 +52,12 @@ proc writeChunksPrefixed*(self: Provider[byte]): Provider[string] =
     onError=proc(err: ref Exception) = stream.recvClose(err))
 
   return provider
+
+proc readLine*(self: Stream[byte]): Future[string] {.async.} =
+  var line = ""
+  while true:
+    var view = self.peekMany()
+    if view.len == 0:
+      await self.waitForData
+
+  return line

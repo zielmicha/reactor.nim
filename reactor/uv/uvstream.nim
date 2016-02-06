@@ -8,11 +8,13 @@ type UvStream* = ref object of BytePipe
   stream*: ptr uv_stream_t
   writeReq: ptr uv_write_t
   writingNow: uv_buf_t
-  shutdownReq: ptr uv_shutdown_t
+  #shutdownReq: ptr uv_shutdown_t
   paused: bool
+  closed: bool
 
 proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
   let self = cast[UvStream](stream.data)
+  if self.closed: return
 
   defer:
     if buf.base != nil: dealloc(buf.base)
@@ -23,7 +25,10 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
       return
 
   if nread < 0:
-    self.inputProvider.sendClose(uvError(nread, "read stream"))
+    if nread == UV_EOF:
+      self.inputProvider.sendClose(JustClose)
+    else:
+      self.inputProvider.sendClose(uvError(nread, "read stream"))
   else:
     assert nread <= buf.len
     let provided = self.inputProvider.provideSome(ByteView(data: buf.base, size: nread))
@@ -43,7 +48,12 @@ proc recvStart(self: UvStream) =
 proc writeReady(self: UvStream)
 
 proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
+  if status == UV_ECANCELED:
+    return
+
   let self = cast[UvStream](req.data)
+  if self.closed:
+    return
 
   if status < 0:
     self.inputProvider.sendClose(uvError(status, "stream write"))
@@ -51,12 +61,30 @@ proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
     self.outputStream.discardItems self.writingNow.len
     self.writeReady()
 
+proc freeStream(stream: ptr uv_stream_t) {.cdecl.} =
+  freeUvMemory(stream)
+
+proc closeStream(self: UvStream) =
+  echo "closing stream"
+  self.closed = true
+  uv_close(cast[ptr uv_handle_t](self.stream), freeStream)
+  self.inputProvider.sendClose(JustClose)
+  self.outputStream.recvClose(JustClose)
+
 proc writeReady(self: UvStream) =
   # TODO: write many buffers (peekManyMany?)
   let waiting = self.outputStream.peekMany()
 
+  if self.closed:
+    return
+
+
   if waiting.len == 0:
-    self.outputStream.onRecvReady.addListener proc() = self.writeReady()
+    if self.outputStream.isSendClosed:
+      logClose(self.outputStream.getSendCloseException)
+      closeStream(self)
+    else:
+      self.outputStream.onRecvReady.addListener proc() = self.writeReady()
   else:
     self.outputStream.onRecvReady.removeAllListeners
 
@@ -83,9 +111,14 @@ proc newUvStream*[T](stream: ptr uv_stream_t, paused=false): T =
     self.recvStart()
 
   self.inputProvider.onSendReady.addListener proc() =
+    if self.inputProvider.isRecvClosed:
+      logClose(self.inputProvider.getRecvCloseException)
+      return
+
     if not self.paused:
       self.recvStart()
 
-  self.outputStream.onRecvReady.addListener proc() = self.writeReady()
+  self.outputStream.onRecvReady.addListener proc() =
+    self.writeReady()
 
   return self

@@ -14,4 +14,4 @@ proc simplePipe(src: Stream[int]) {.async.} =
 let (s, p) = newStreamProviderPair[int]()
 p.provideAll(@[1, 2, 3]).then(() => p.sendClose(JustClose)).ignore
 
-simplePipe(s).ignoreError(CloseException).runLoop()
+simplePipe(s).runLoop()

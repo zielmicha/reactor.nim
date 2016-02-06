@@ -256,6 +256,10 @@ proc completeError*(self: Completer, x: string) =
 
 proc runLoop*[T](f: Future[T]): T =
   var loopRunning = true
+
+  if not f.isCompleted:
+    f.completer.callback = proc(data: RootRef, future: Completer[T]) = stopLoop()
+
   while not f.isCompleted:
     if not loopRunning:
       raise newException(Exception, "loop finished, but future is still uncompleted")

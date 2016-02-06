@@ -40,7 +40,7 @@ proc `$`*[T](r: Result[T]): string =
     else:
       return "just(...)"
   else:
-    return "error(" & (if r.error == nil: "nil" else: r.error.msg) & ")"
+    return "error(" & (if r.error == nil or r.error.msg == nil: "nil" else: r.error.msg) & ")"
 
 proc onSuccessOrErrorR*[T](f: Result[T], onSuccess: (proc(t:T)), onError: (proc(t:ref Exception))) =
   if f.isSuccess:

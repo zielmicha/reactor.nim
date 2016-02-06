@@ -46,3 +46,6 @@ proc runLoopOnce*(): bool =
   let loop = getThreadUvLoop()
   let status = uv_run(loop, UV_RUN_ONCE)
   return status != 0
+
+proc stopLoop*() =
+  uv_stop(getThreadUvLoop())

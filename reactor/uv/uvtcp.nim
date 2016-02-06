@@ -13,6 +13,8 @@ type
 
   TcpConnection* = ref object of uvstream.UvStream
 
+export UvStream
+
 proc newTcpConnection*(client: ptr uv_handle_t): TcpConnection =
   return newUvStream[TcpConnection](cast[ptr uv_stream_t](client))
 
@@ -105,7 +107,7 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
     let state = cast[State](req.data)
     if status < 0:
       state.completer.completeError(uvError(status, state.errMsg))
-      # FIXME: close handle
+      uv_close(req.handle, freeUvMemory)
     else:
       state.completer.complete(newUvStream[TcpConnection](req.handle))
 
@@ -130,3 +132,7 @@ proc connectTcp*(host: string, port: int): Future[TcpConnection] =
       return connectTcp(addresses[0], port)
 
   return resolveAddress(host).then(resolved)
+
+proc close*(t: TcpConnection, err: ref Exception) =
+  # why close doesn't work without this?
+  (Pipe[byte])(t).close(err)

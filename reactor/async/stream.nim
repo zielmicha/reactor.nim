@@ -17,7 +17,7 @@ type
     input*: Stream[T]
     output*: Provider[T]
 
-  CloseException* = Exception
+  CloseException* = object of Exception
     ## Just close the stream/provider, without any error.
 
 let
@@ -48,13 +48,24 @@ proc `onRecvReady`*[T](self: Stream[T]): auto =
 proc `onSendReady`*[T](self: Provider[T]): auto =
   sself.onSendReady
 
+proc getRecvCloseException*(self: Provider): auto =
+  assert sself.recvClosed
+  sself.recvCloseException
+
+proc getSendCloseException*(self: Stream): auto =
+  assert self.sendClosed
+  self.sendCloseException
+
 proc checkProvide(self: Provider) =
   if sself.sendClosed:
     # closes are broken, disable this for now
     discard #raise newException(Exception, "provide on closed stream")
 
-proc isSendClosed*(self: Provider): bool =
-  sself.sendClosed
+proc isRecvClosed*(self: Provider): bool =
+  sself.recvClosed
+
+proc isSendClosed*(self: Stream): bool =
+  self.sendClosed
 
 proc provideSome*[T](self: Provider[T], data: ConstView[T]): int =
   ## Provides some items pointed by view `data`. Returns how many items
@@ -172,6 +183,21 @@ proc discardItems*[T](self: Stream[T], count: int) =
 
   self.queue.popFront(count)
 
+proc waitForData*[T](self: Stream[T]): Future[void] =
+  ## Waits until some data is available in the buffer. For use with `peekMany` and `discardItems`.
+  if self.queue.len != 0:
+    return now(just())
+
+  let completer = newCompleter[void]()
+  var recvListenerId: CallbackId
+
+  recvListenerId = self.onRecvReady.addListener(proc() =
+    if self.queue.len != 0:
+      completer.complete()
+      self.onRecvReady.removeListener(recvListenerId)
+    elif self.sendClosed:
+      completer.completeError(self.sendCloseException))
+
 proc receiveSomeInto*[T](self: Stream[T], target: View[T]): int =
   ## Pops all available data into `target`, but not more that the length of `target`.
   ## Returns the number of bytes copied to target.
@@ -205,7 +231,6 @@ proc receiveChunk[T, Ret](self: Stream[T], minn: int, maxn: int, returnType: typ
   let completer = newCompleter[Ret]()
 
   var recvListenerId: CallbackId
-  var closeListenerId: CallbackId
 
   recvListenerId = self.onRecvReady.addListener(proc() =
     offset += self.receiveSomeInto(res.asView.slice(offset))
@@ -323,3 +348,7 @@ proc unwrapStreamFuture[T](f: Future[Stream[T]]): Stream[T] =
                      proc(exception: ref Exception) = provider.sendClose(exception))
 
   return stream
+
+proc logClose*(err: ref Exception) =
+  if not (err of CloseException):
+    stderr.writeLine("Closing stream: " & err.msg)
