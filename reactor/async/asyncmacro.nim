@@ -40,9 +40,10 @@ template tryAwait*(body: expr): expr =
 
   fut
 
-template await*(body): expr =
-  {.error: "await outside of an async proc".}
-  discard
+# This collides with threadpool.await (due to compiler bug?)
+# template await*(body): expr =
+#   {.error: "await outside of an async proc".}
+#   discard
 
 proc asyncIteratorRun*(it: (iterator(): AsyncIterator)) =
   var asyncIter = it()

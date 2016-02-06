@@ -95,7 +95,7 @@ type
   uv_prepare_t* = pointer
   uv_check_t* = pointer
   uv_idle_t* = uv_handle_t
-  uv_async_t* = pointer
+  uv_async_t* = uv_handle_t
   uv_process_t* = uv_handle_t
   uv_fs_event_t* = pointer
   uv_fs_poll_t* = pointer
