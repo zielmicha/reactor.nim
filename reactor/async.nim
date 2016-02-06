@@ -9,6 +9,7 @@ import reactor/datatypes/basic
 import reactor/loop
 
 include reactor/async/event
+include reactor/async/result
 include reactor/async/future
 include reactor/async/stream
 include reactor/async/asyncmacro

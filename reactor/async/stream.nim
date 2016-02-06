@@ -232,10 +232,32 @@ proc receive*[T](self: Stream[T]): Future[T] =
   return self.receiveAll(1).then((x: seq[T]) => x[0])
 
 proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil) =
+  var targetListenerId: CallbackId
+  var selfListenerId: CallbackId
+
+  proc stop() =
+    target.onSendReady.removeListener(targetListenerId)
+    self.onRecvReady.removeListener(selfListenerId)
+
   proc pipeSome() =
     while true:
       let view = self.peekMany()
-      if view.len == 0: break
+      if Stream[R](target).recvClosed:
+        self.recvClose(Stream[R](target).recvCloseException)
+        stop()
+        break
+
+      if view.len == 0:
+        if self.sendClosed:
+          target.sendClose(self.sendCloseException)
+          stop()
+        break
+
+      if Stream[R](target).sendClosed:
+        target.sendClose(newException(ValueError, "write side closed"))
+        stop()
+        break
+
       var didSend: int
       if function == nil:
         when T is R:
@@ -251,14 +273,8 @@ proc pipeChunks*[T, R](self: Stream[T], target: Provider[R], function: (proc(sou
       self.discardItems(didSend)
       if didSend == 0: break
 
-  target.onSendReady.addListener(pipeSome)
-  self.onRecvReady.addListener(pipeSome)
-
-  self.onSendClose.addListener(proc(info: ref Exception) =
-    target.sendClose(info))
-
-  target.onRecvClose.addListener(proc(info: ref Exception) =
-    self.recvClose(info))
+  targetListenerId = target.onSendReady.addListener(pipeSome)
+  selfListenerId = self.onRecvReady.addListener(pipeSome)
 
 proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
   return proc(source: ConstView[T], target: var seq[R]) =

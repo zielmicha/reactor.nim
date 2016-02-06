@@ -17,6 +17,13 @@ proc baseBufferSizeFor*[T](v: typedesc[T]): int =
   else:
     return int(1024 / sizeof(v))
 
+template returnMaybeVoid*(e: expr): stmt =
+  if type(e) is void:
+    e
+    return
+  else:
+    return e
+
 proc convertEndian(size: static[int], dst: pointer, src: pointer, endian=bigEndian) {.inline.} =
   when size == 1:
     copyMem(dst, src, 1)

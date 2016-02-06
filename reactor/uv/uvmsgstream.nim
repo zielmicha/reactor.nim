@@ -67,6 +67,7 @@ proc resume*(self: MsgPipe) =
   self.recvStart()
 
 proc newMsgPipe*(fileno: cint): MsgPipe =
+  # TODO: onClose!!!
   let self = new(MsgPipe)
   (self.input, self.inputProvider) = newStreamProviderPair[string]()
   (self.outputStream, self.output) = newStreamProviderPair[string]()
@@ -87,11 +88,5 @@ proc newMsgPipe*(fileno: cint): MsgPipe =
     self.recvStart()
 
   self.outputStream.onRecvReady.addListener proc() = self.writeReady()
-
-  self.inputProvider.onRecvClose.addListener proc(err: ref Exception) =
-    discard # TODO
-
-  self.outputStream.onSendClose.addListener proc(err: ref Exception) =
-    discard # TODO
 
   return self

@@ -17,11 +17,7 @@ type
 
     case isFinished: bool
     of true:
-      case isSuccess: bool
-      of true:
-        result: T
-      of false:
-        error: ref Exception
+      result: Result[T]
     of false:
       data: RootRef
       callback: (proc(data: RootRef, future: Completer[T]) {.closure.})
@@ -39,10 +35,7 @@ proc makeInfo[T](f: Future[T]): string =
     if c.isFinished:
       if c.consumed:
         result &= "consumed "
-      if c.isSuccess:
-        result &= "completed with success"
-      else:
-        result &= "completed with error"
+      result &= $c.result
     else:
       result &= "unfinished"
 
@@ -67,30 +60,42 @@ proc newCompleter*[T](): Completer[T] =
   when debugFutures:
     result.stackTrace = getStackTrace()
 
-proc immediateFuture*[T](value: T): Future[T] =
-  when T is void:
-    Future[T](isImmediate: true)
+proc now*[T](res: Result[T]): Future[T] =
+  if res.isSuccess:
+    when T is void:
+      return Future[T](isImmediate: true)
+    else:
+      return Future[T](isImmediate: true, value: res.value)
   else:
-    Future[T](isImmediate: true, value: value)
+    return Future[T](isImmediate: false, completer: Completer[T](isFinished: true, result: res))
+
+proc immediateFuture*[T](value: T): Future[T] =
+  let r = just(value)
+  return now(r)
 
 proc immediateFuture*(): Future[void] =
-  Future[void](isImmediate: true)
+  now(just())
 
 proc immediateError*[T](value: string): Future[T] =
-  let self = newCompleter[T]()
-  self.completeError(value)
-  return self.getFuture
+  now(error(T, value))
 
 proc immediateError*[T](value: ref Exception): Future[T] =
-  let self = newCompleter[T]()
-  self.completeError(value)
-  return self.getFuture
+  now(error(T, value))
 
 proc isCompleted*(self: Future): bool =
   return self.isImmediate or self.completer.isFinished
 
 proc isSuccess*(self: Future): bool =
-  return self.isImmediate or (self.completer.isFinished and self.completer.isSuccess)
+  return self.isImmediate or (self.completer.isFinished and self.completer.result.isSuccess)
+
+proc getResult*[T](self: Future[T]): Result[T] =
+  if self.isImmediate:
+    when T is not void:
+      return just(self.value)
+  else:
+    assert self.completer.isFinished
+    self.completer.consumed = true
+    return self.completer.result
 
 proc get*[T](self: Future[T]): T =
   if self.isImmediate:
@@ -99,43 +104,30 @@ proc get*[T](self: Future[T]): T =
   else:
     assert self.completer.isFinished
     self.completer.consumed = true
-    if self.completer.isSuccess:
-      when T is not void:
-        return self.completer.result
+    when T is void:
+      self.completer.result.get
     else:
-      raise self.completer.error
+      return self.completer.result.get
 
-proc getError*[T](self: Future[T]): ref Exception =
-  self.completer.consumed = true
-  return self.completer.error
+proc completeResult*[T](self: Completer[T], x: Result[T]) =
+  assert (not self.isFinished)
+  let data = self.data
+  let callback = self.callback
+  self.data = nil
+  self.callback = nil
+  self.isFinished = true
+  self.result = x
+  if callback != nil:
+    callback(data, self)
 
 proc complete*[T](self: Completer[T], x: T) =
-  assert (not self.isFinished)
-  let data = self.data
-  let callback = self.callback
-  self.data = nil
-  self.callback = nil
-  self.isFinished = true
-  self.isSuccess = true
-  when T is not void:
-    self.result = x
-  if callback != nil:
-    callback(data, self)
+  self.completeResult(just(x))
 
 proc complete*(self: Completer[void]) =
-  complete[void](self)
+  completeResult[void](self, just())
 
 proc completeError*[T](self: Completer[T], x: ref Exception) =
-  assert (not self.isFinished)
-  let data = self.data
-  let callback = self.callback
-  self.data = nil
-  self.callback = nil
-  self.isFinished = true
-  self.isSuccess = false
-  self.error = x
-  if callback != nil:
-    callback(data, self)
+  self.completeResult(error(T, x))
 
 proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t:ref Exception))) =
   if f.isImmediate:
@@ -148,17 +140,14 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
   let c = f.completer
   c.consumed = true
   if c.isFinished:
-    if c.isSuccess:
-      when T is void:
-        onSuccess()
-      else:
-        onSuccess(c.result)
-    else:
-      onError(c.error)
+    onSuccessOrErrorR[T](c.result, onSuccess, onError)
   else:
     c.callback =
       proc(data: RootRef, compl: Completer[T]) =
         onSuccessOrError[T](f, onSuccess, onError)
+
+proc onSuccessOrError*(f: Future[void], onSuccess: (proc()), onError: (proc(t:ref Exception))) =
+  onSuccessOrError[void](f, onSuccess, onError)
 
 proc onError*(f: Future[Bottom], onError: (proc(t: ref Exception))) =
   onSuccessOrError(f, nil, onError)
@@ -181,7 +170,7 @@ proc ignoreError*[Exc](f: Future[void], kind: typedesc[Exc]): Future[void] =
 
   return completer.getFuture
 
-converter ignoreVoidResult*(f: Future[void]): Future[Bottom] =
+converter ignoreVoidResult*(f: Future[void]): Future[Bottom] {.deprecated.} =
   ignoreResult(f)
 
 proc thenNowImpl[T, R](f: Future[T], function: (proc(t:T):R)): auto =

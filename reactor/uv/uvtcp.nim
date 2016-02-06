@@ -52,7 +52,7 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
   proc closeTcpServer(err: ref Exception) =
     uv_close(cast[ptr uv_handle_t](server), tcpServerClosed)
 
-  serverObj.incomingConnectionsProvider.onRecvClose.addListener closeTcpServer
+  # TODO: serverObj.incomingConnectionsProvider.onRecvClose.addListener closeTcpServer
 
   GC_ref(serverObj)
   server.data = cast[pointer](serverObj)

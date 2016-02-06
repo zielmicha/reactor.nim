@@ -21,7 +21,7 @@ template awaitInIterator*(body: expr, errorFunc: expr): expr =
     yield iterFuture(fut)
 
   if not fut.isSuccess:
-    let err = fut.getError
+    let err = fut.getResult.error
     errorFunc(err)
     stopAsync()
 
@@ -32,13 +32,13 @@ template awaitInIterator*(body: expr, errorFunc: expr): expr =
       fut.completer.consumed = true
 
 template tryAwait*(body: expr): expr =
-  ## Waits for future completion and returns it.
+  ## Waits for future completion and returns the result.
   let fut = body
   assert fut.isImmediate or fut.completer != nil, "nil passed to await"
   if not fut.isCompleted:
     yield iterFuture(fut)
 
-  fut
+  fut.getResult
 
 # This collides with threadpool.await (due to compiler bug?)
 # template await*(body): expr =
@@ -146,14 +146,13 @@ macro asyncFor*(iterClause: expr, body: expr): stmt {.immediate.} =
   let newBody = quote do:
     let collection = `coll`
     while true:
-      let fut = tryAwait receive(collection)
-      if not fut.isSuccess:
-        let err = fut.getError()
-        if err == JustClose:
+      let res = tryAwait receive(collection)
+      if not res.isSuccess:
+        if res.error == JustClose:
           break
         else:
-          asyncRaise err
-      let `itemName` = fut.get
+          asyncRaise res.error
+      let `itemName` = res.get
       `body`
 
   newBody
