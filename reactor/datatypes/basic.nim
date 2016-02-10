@@ -60,7 +60,8 @@ proc `[]`*[T](v: View[T], i: int): var T =
   return ptrAdd[T](v.data, i)[]
 
 proc slice*[T](v: SomeView[T], start: int, size: int): SomeView[T] =
-  assert start < v.len and start >= 0
+  if start != 0:
+    assert start < v.len and start >= 0
   assert size >= 0 and start + size <= v.len
   result.data = ptrAdd[T](v.data, start)
   result.size = size

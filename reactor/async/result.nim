@@ -8,7 +8,7 @@ type
     of false:
       error*: ref Exception
 
-proc isError*[T](r: Result[T]) =
+proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess
 
 proc just*[T](r: T): Result[T] =
@@ -56,3 +56,9 @@ proc onSuccessOrErrorR*(f: Result[void], onSuccess: (proc()), onError: (proc(t:r
     onSuccess()
   else:
     onError(f.error)
+
+# Future compat
+
+proc getResult*(r: Result): auto = r
+
+proc isCompleted*(r: Result): bool = true

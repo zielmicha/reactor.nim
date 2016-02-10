@@ -35,3 +35,20 @@ proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void
 proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] {.async.} =
   asyncFor item in self:
     function(item)
+
+proc pipeLimited*[T](self: Stream[T], provider: Provider[T], limit: int64): Future[void] {.async.} =
+  var limit = limit
+  while limit > 0:
+    let data = await self.receiveSome(max(limit, (baseBufferSizeFor(T) * 8).int64).int)
+    limit -= data.len
+    await provider.provideAll(data)
+
+proc newConstStream*[T](val: seq[T]): Stream[T] =
+  let (stream, provider) = newStreamProviderPair[T]()
+  provider.provideAll(val).ignore()
+  return stream
+
+proc newConstStream*(val: string): Stream[byte] =
+  let (stream, provider) = newStreamProviderPair[byte]()
+  provider.provideAll(val).ignore()
+  return stream

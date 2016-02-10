@@ -198,6 +198,8 @@ proc waitForData*[T](self: Stream[T]): Future[void] =
     elif self.sendClosed:
       completer.completeError(self.sendCloseException))
 
+  return completer.getFuture
+
 proc receiveSomeInto*[T](self: Stream[T], target: View[T]): int =
   ## Pops all available data into `target`, but not more that the length of `target`.
   ## Returns the number of bytes copied to target.
@@ -245,7 +247,7 @@ proc receiveChunk[T, Ret](self: Stream[T], minn: int, maxn: int, returnType: typ
   return completer.getFuture
 
 proc receiveSome*[T](self: Stream[T], n: int): Future[seq[T]] =
-  ## Pops `n` items from the stream.
+  ## Pops at most `n` items from the stream.
   receiveChunk(self, 1, n, seq[T])
 
 proc receiveAll*[T](self: Stream[T], n: int): Future[seq[T]] =
@@ -352,3 +354,9 @@ proc unwrapStreamFuture[T](f: Future[Stream[T]]): Stream[T] =
 proc logClose*(err: ref Exception) =
   if not (err of CloseException):
     stderr.writeLine("Closing stream: " & err.msg)
+
+proc onErrorClose*(f: Future[void], p: Provider) =
+  ## When future f completes with error, close provider p.
+  f.onSuccessOrError(
+    onSuccess=nothing1[void],
+    onError=proc(t: ref Exception) = p.sendClose(t))

@@ -15,7 +15,7 @@ type
 
 export UvStream
 
-proc newTcpConnection*(client: ptr uv_handle_t): TcpConnection =
+proc newTcpConnection(client: ptr uv_handle_t): TcpConnection =
   return newUvStream[TcpConnection](cast[ptr uv_stream_t](client))
 
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =

@@ -16,20 +16,23 @@ template stopAsync*(): expr =
 
 template awaitInIterator*(body: expr, errorFunc: expr): expr =
   let fut = body
-  assert fut.isImmediate or fut.completer != nil, "nil passed to await"
-  if not fut.isCompleted:
-    yield iterFuture(fut)
+  when fut is Future:
+    assert fut.isImmediate or fut.completer != nil, "nil passed to await"
+    if not fut.isCompleted:
+      yield iterFuture(fut)
+  elif not (fut is Result):
+    {.error: "await on wrong type (expected Result or Future)".}
 
   if not fut.isSuccess:
     let err = fut.getResult.error
     errorFunc(err)
     stopAsync()
 
-  when not (fut is Future[void]):
+  when not (fut is Future[void] or fut is Result[void]):
     fut.get
   else:
-    if not fut.isImmediate:
-      fut.completer.consumed = true
+    fut.get
+    discard
 
 template tryAwait*(body: expr): expr =
   ## Waits for future completion and returns the result.

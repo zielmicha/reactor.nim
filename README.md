@@ -7,3 +7,10 @@
 *reactor.nim* doesn't use asynchronous mechanisms from `asyncdispatch` stdlib module and instead provides its own. They are arguably richer and more performant. The API is inspired by Dart and Midori OS (in particular by [this article](http://joeduffyblog.com/2015/11/19/asynchronous-everything/)).
 
 There is Emscripten/WebAssembly port planned.
+
+
+## FAQ
+
+### How do I report security bugs?
+
+Please email michal@zielinscy.org.pl.

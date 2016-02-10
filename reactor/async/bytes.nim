@@ -4,7 +4,12 @@ type
   ByteProvider* = Provider[byte]
 
 proc read*(self: Stream[byte], count: int): Future[string] =
+  ## Reads exactly `count` bytes from stream. Raises error if stream is closed before it manages to read them.
   self.receiveChunk(count, count, string)
+
+proc readSome*(self: Stream[byte], maxCount: int): Future[string] =
+  ## Reads at least one byte, but not more than `maxCount`. Raises error if stream is closed anything is read.
+  self.receiveChunk(1, maxCount, string)
 
 proc readItem*[T](self: Stream[byte], `type`: typedesc[T], endian=bigEndian): Future[T] =
   return self.read(sizeof(T)).then(proc(x: string): T = unpack(x, T, endian))
@@ -53,11 +58,34 @@ proc writeChunksPrefixed*(self: Provider[byte]): Provider[string] =
 
   return provider
 
-proc readLine*(self: Stream[byte]): Future[string] {.async.} =
+proc readUntil*(self: Stream[byte], chars: set[char], limit=high(int)): Future[string] {.async.} =
   var line = ""
-  while true:
-    var view = self.peekMany()
-    if view.len == 0:
-      await self.waitForData
+  template addAndTrimToLimit(s: expr) =
+    assert line.len <= limit
+    var value = s
+    if value.len > limit - line.len:
+      value.setLen(limit - line.len)
+    line &= value
+    self.discardItems(value.len)
+
+  block main:
+    while true:
+      var view = self.peekMany()
+
+      for i in 0..<view.len:
+        if view[i].char in chars:
+          addAndTrimToLimit(view.slice(0, i + 1).copyAsString)
+          break main
+
+      addAndTrimToLimit(view.copyAsString)
+      if line.len == limit:
+        break
+
+      if view.len == 0:
+        if (tryAwait self.waitForData).isError:
+          break
 
   return line
+
+proc readLine*(self: Stream[byte], limit=high(int)): Future[string] =
+  return self.readUntil(chars={'\L'}, limit=limit)

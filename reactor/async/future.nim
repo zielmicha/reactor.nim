@@ -165,7 +165,7 @@ proc ignoreError*[Exc](f: Future[void], kind: typedesc[Exc]): Future[void] =
 
   onSuccessOrError[void](f, onSuccess=(proc() = complete(completer)),
                          onError=proc(t: ref Exception) =
-                                if t of kind: complete(completer)
+                                if t of Exc: complete(completer)
                                 else: completer.completeError(t))
 
   return completer.getFuture

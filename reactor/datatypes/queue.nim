@@ -18,17 +18,16 @@ proc newQueue*[T](chunkSize=4096): Queue[T] =
   result.chunkSize = chunkSize
   result.list = initDoublyLinkedList[QueueChunk[T]]()
 
-proc initChunk[T](queue: Queue[T]): QueueChunk[T] =
-  result.data = newSeq[T](queue.chunkSize)
-  result.begin = 0
-  result.`end` = 0
-
 proc len*(queue: Queue): int =
   return queue.size
 
+proc appendChunk[T](queue: Queue[T]) =
+  queue.list.append(QueueChunk[T](begin: 0, `end`: 0))
+  queue.list.tail.value.data = newSeq[T](queue.chunkSize)
+
 proc pushBackMany*[T](queue: Queue[T], items: ConstView[T]) =
   if queue.list.tail == nil:
-    queue.list.append(queue.initChunk())
+    queue.appendChunk()
 
   var index: int = 0
   while true:
@@ -44,7 +43,7 @@ proc pushBackMany*[T](queue: Queue[T], items: ConstView[T]) =
     if index >= items.len:
       break
 
-    queue.list.append(queue.initChunk())
+    queue.appendChunk()
 
 proc pushBack*[T](queue: Queue[T], item: T) =
   var itemI = item
@@ -59,6 +58,8 @@ proc peekFrontMany*[T](queue: Queue[T]): ConstView[T] =
   return seqView(head.value.data).slice(head.value.begin, head.value.`end` - head.value.begin).viewToConstView
 
 proc popFront*[T](queue: Queue[T], count=1) =
+  if count > queue.size:
+    raise newException(ValueError, "trying to pop $1 items, but only $2 are on the queue" % [$count, $queue.size])
   var count = count
   while count > 0:
     let head = queue.list.head
