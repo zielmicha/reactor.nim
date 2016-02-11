@@ -79,3 +79,8 @@ proc parseUri*(uri: string): Uri =
   ## Parses a URI and returns it.
   result = initUri()
   parseUri(uri, result)
+
+proc fullPath*(uri: Uri): string =
+  result = uri.path
+  if uri.query.len != 0:
+    result &= "?" & uri.query

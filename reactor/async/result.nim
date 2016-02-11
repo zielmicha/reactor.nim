@@ -8,6 +8,8 @@ type
     of false:
       error*: ref Exception
 
+  InstantationInfo* = tuple[filename: string, line: int]
+
 proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess
 

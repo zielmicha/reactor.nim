@@ -83,6 +83,8 @@ macro async*(a): stmt =
   let body = transformAsyncBody(a[6])
   let returnTypeFull = a[3][0]
 
+  let procNameStripped = if procName.kind == nnkPostfix: procName[1] else: procName
+
   if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future")):
     error("invalid return type from async proc (expected Future[T])")
 
@@ -113,12 +115,14 @@ macro async*(a): stmt =
         asyncProcCompleter.complete(e)
         return
 
-    let iter = iterator(): AsyncIterator {.closure.} =
+    iterator `procNameStripped`(): AsyncIterator {.closure.} =
       `body`
       when `returnType` is void:
         asyncProcCompleter.complete()
       else:
         asyncProcCompleter.completeError("missing asyncReturn")
+
+    let iter: (iterator(): AsyncIterator) = `procNameStripped`
 
     asyncIteratorRun(iter)
     return asyncProcCompleter.getFuture

@@ -1,4 +1,4 @@
-import reactor/async, reactor/tcp, reactor/safeuri, strutils
+import reactor/async, reactor/tcp, reactor/safeuri, reactor/safeuri, strutils, options
 import reactor/http/httpcommon
 
 type
@@ -15,6 +15,9 @@ proc newHttpConnection*(conn: BytePipe, defaultHost: string): Future[HttpConnect
 
 proc newHttpConnection*(host: string, port=80): Future[HttpConnection] {.async.} =
   return await newHttpConnection(await connectTcp(host, port), defaultHost=host)
+
+proc newHttpConnection*(req: HttpRequest): Future[HttpConnection] =
+  newHttpConnection(req.host, req.port)
 
 proc makeHeaders(request: HttpRequest): Result[string] =
   if not request.httpMethod.hasOnlyChars(Letters + Digits):
@@ -35,16 +38,22 @@ proc makeHeaders(request: HttpRequest): Result[string] =
 proc sendOnlyRequest*(conn: HttpConnection, request: HttpRequest): Future[void] {.async.} =
   await conn.conn.output.write(await makeHeaders(request))
 
-proc sendRequest*(conn: HttpConnection, request: HttpRequest): Future[void] {.async.} =
-  if request.dataLength != -1:
-    request.headers["content-length"] = $(request.dataLength)
+proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=false): Future[void] {.async.} =
+  if request.data.isSome:
+    request.headers["content-length"] = $(request.data.get.length)
 
-  if "host" notin request.headers and conn.defaultHost != nil:
-    request.headers["host"] = conn.defaultHost
+  if closeConnection:
+    request.headers["connection"] = "close"
+
+  if "host" notin request.headers:
+    if request.host != nil:
+      request.headers["host"] = request.host
+    elif conn.defaultHost != nil:
+      request.headers["host"] = conn.defaultHost
 
   await conn.sendOnlyRequest(request)
-  if request.dataLength != -1:
-    await pipeLimited(request.data, conn.conn.output, limit=request.dataLength)
+  if request.data.isSome:
+    await pipeLimited(request.data.get.stream, conn.conn.output, limit=request.data.get.length)
 
 proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
   var headerSizeLimit = 1024 * 8
@@ -142,4 +151,13 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
 
   return response
 
-#proc request*(conn: HttpConnection, )
+proc methodExpectsBody(name: string): bool =
+  return name.toUpper != "HEAD"
+
+proc request*(conn: HttpConnection, req: HttpRequest, closeConnection=false): Future[HttpResponse] {.async.} =
+  await conn.sendRequest(req, closeConnection)
+  return (await conn.readResponse(expectingBody=methodExpectsBody(req.httpMethod)))
+
+proc request*(req: HttpRequest): Future[HttpResponse] {.async.} =
+  let conn = await newHttpConnection(req)
+  return (await conn.request(req))

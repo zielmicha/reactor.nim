@@ -1,4 +1,4 @@
-import reactor/async, tables, strutils
+import reactor/async, reactor/safeuri, tables, strutils, options
 
 type
   HeaderTable* = object
@@ -10,11 +10,15 @@ type
     dataStream*: ByteStream
 
   HttpRequest* = ref object
+    host*: string
+    port*: int
+    isSsl*: bool
     httpMethod*: string
     path*: string
     headers*: HeaderTable
-    dataLength*: int64
-    data*: ByteStream
+    data*: Option[LengthByteStream]
+
+proc tryParseUint64*(val: string): Result[int64]
 
 converter headerTable*(arr: openarray[tuple[k: string, v: string]]): HeaderTable =
   result.headers = initTable[string, string]()
@@ -50,12 +54,47 @@ proc len*(self: HeaderTable): int =
 
 #
 
-proc newHttpRequest*(httpMethod: string, path: string, headers: HeaderTable=initHeaderTable(), data: string=nil): HttpRequest =
-  HttpRequest(dataLength: if data == nil: -1 else: data.len,
-              data: if data == nil: newConstStream(data) else: nil,
+proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteStream]=none(LengthByteStream), port: int=0, isSsl=false): HttpRequest =
+  HttpRequest(data: data,
               headers: headers,
               path: path,
-              httpMethod: httpMethod)
+              port: port,
+              isSsl: isSsl,
+              httpMethod: httpMethod,
+              host: host)
+
+proc newHttpRequest*(httpMethod: string, url: Uri, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteStream]): Result[HttpRequest] =
+  var isSsl = false
+  if url.scheme == "https":
+    isSsl = true
+  elif url.scheme == "http":
+    isSsl = false
+  else:
+    return error(HttpRequest, "invalid schema")
+
+  let portR = tryParseUint64(url.port)
+  if portR.isError:
+    return error(HttpRequest, portR.error)
+
+  var port = portR.get
+
+  if port == 0:
+    port = 80
+
+  if port <= 0 or port >= 65536:
+    return error(HttpRequest, "invalid port")
+
+  HttpRequest(httpMethod: httpMethod,
+              path: url.fullPath,
+              host: url.hostname,
+              port: port.int,
+              isSsl: isSsl,
+              headers: headers,
+              data: data).just
+
+proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteStream]=none(LengthByteStream)): Result[HttpRequest] =
+  let uri = parseUri(url)
+  return newHttpRequest(httpMethod, uri, headers, data)
 
 proc `$`*(req: HttpResponse): string =
   var headers: seq[string] = @[]

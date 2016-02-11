@@ -20,6 +20,8 @@ type
   CloseException* = object of Exception
     ## Just close the stream/provider, without any error.
 
+  LengthStream*[T] = tuple[length: int64, stream: Stream[T]]
+
 let
   JustClose* = new(CloseException)
 
@@ -188,6 +190,9 @@ proc waitForData*[T](self: Stream[T]): Future[void] =
   if self.queue.len != 0:
     return now(just())
 
+  if self.sendClosed:
+    return now(error(void, self.sendCloseException))
+
   let completer = newCompleter[void]()
   var recvListenerId: CallbackId
 
@@ -196,7 +201,8 @@ proc waitForData*[T](self: Stream[T]): Future[void] =
       completer.complete()
       self.onRecvReady.removeListener(recvListenerId)
     elif self.sendClosed:
-      completer.completeError(self.sendCloseException))
+      completer.completeError(self.sendCloseException)
+      self.onRecvReady.removeListener(recvListenerId))
 
   return completer.getFuture
 

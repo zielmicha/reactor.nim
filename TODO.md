@@ -13,6 +13,7 @@
 * slice should probably use doAssert
 * show all currently running coroutines
 * Future should be non nil or something
+* httpclient connection pool support
 
 ### TODO (asyncmacro)
 * `yield` to `asyncYield`

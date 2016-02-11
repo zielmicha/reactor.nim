@@ -42,6 +42,7 @@ proc pipeLimited*[T](self: Stream[T], provider: Provider[T], limit: int64): Futu
     let data = await self.receiveSome(max(limit, (baseBufferSizeFor(T) * 8).int64).int)
     limit -= data.len
     await provider.provideAll(data)
+  provider.sendClose(JustClose)
 
 proc newConstStream*[T](val: seq[T]): Stream[T] =
   let (stream, provider) = newStreamProviderPair[T]()
@@ -52,3 +53,9 @@ proc newConstStream*(val: string): Stream[byte] =
   let (stream, provider) = newStreamProviderPair[byte]()
   provider.provideAll(val).ignore()
   return stream
+
+proc newLengthStream*[T](data: seq[T]): LengthStream[T] =
+  (data.len.int64, newConstStream(data))
+
+proc newLengthStream*(data: string): LengthStream[byte] =
+  (data.len.int64, newConstStream(data))

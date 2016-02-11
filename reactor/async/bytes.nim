@@ -2,6 +2,7 @@ type
   BytePipe* = Pipe[byte]
   ByteStream* = Stream[byte]
   ByteProvider* = Provider[byte]
+  LengthByteStream* = LengthStream[byte]
 
 proc read*(self: Stream[byte], count: int): Future[string] =
   ## Reads exactly `count` bytes from stream. Raises error if stream is closed before it manages to read them.
@@ -86,6 +87,9 @@ proc readUntil*(self: Stream[byte], chars: set[char], limit=high(int)): Future[s
           break
 
   return line
+
+proc readUntilEof*(self: Stream[byte], limit=high(int)): Future[string] =
+  self.readUntil(chars={}, limit=limit)
 
 proc readLine*(self: Stream[byte], limit=high(int)): Future[string] =
   return self.readUntil(chars={'\L'}, limit=limit)
