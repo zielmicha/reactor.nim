@@ -10,6 +10,47 @@ type
 
   InstantationInfo* = tuple[filename: string, line: int]
 
+  ExceptionMeta = ref object
+    instInfo: InstantationInfo
+    next: ExceptionMeta
+
+when debugFutures:
+  import reactor/datatypes/expando
+  var exceptionMeta: Expando[ExceptionMeta]
+
+  proc getMeta(exc: ref Exception): ExceptionMeta =
+    ensureInit(exceptionMeta)
+    exceptionMeta.get(exc)
+
+  proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
+    ensureInit(exceptionMeta)
+    let next = exceptionMeta.get(exc)
+    let meta = ExceptionMeta(instInfo: info, next: next)
+    result = exceptionMeta.copyWithValue(exc[], meta)
+    #echo "attached to ", exc.repr, " as ", result.repr, " test: ", result.getMeta.repr
+else:
+  proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
+    return exc
+
+  proc getMeta(exc: ref Exception): ExceptionMeta = nil
+
+proc attachInstInfo(exc: string, info: InstantationInfo): ref Exception =
+  attachInstInfo(newException(Exception, exc), info)
+
+proc formatAsyncTrace(meta: ExceptionMeta): string =
+  if meta == nil:
+    return ""
+  let info = meta.instInfo
+  let line = "$1($2)" % [info.filename, $info.line]
+  line & "\n" & formatAsyncTrace(meta.next)
+
+proc printError*(err: ref Exception) =
+  stderr.writeLine "Asynchronous exception: "
+  stderr.writeLine err.getStackTrace
+  stderr.writeLine "Trace"
+  stderr.writeLine formatAsyncTrace(err.getMeta())
+  stderr.writeLine "Error: " & ($err.msg)
+
 proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess
 

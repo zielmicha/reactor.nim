@@ -20,3 +20,4 @@
 * add try-except support
 * (possibly) catch all other exceptions and convert to async failure
 * rewriting of returns inside asyncReturn
+* make defer work

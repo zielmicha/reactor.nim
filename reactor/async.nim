@@ -1,5 +1,5 @@
 import future
-import tables, hashes
+import tables, hashes, strutils
 
 export future.`=>`, future.`->`
 
@@ -7,6 +7,8 @@ import reactor/util
 import reactor/datatypes/queue
 import reactor/datatypes/basic
 import reactor/loop
+
+const debugFutures = not defined(release)
 
 include reactor/async/event
 include reactor/async/result

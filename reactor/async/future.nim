@@ -1,6 +1,4 @@
 
-const debugFutures = not defined(release)
-
 type
   Future*[T] = object
     case isImmediate: bool

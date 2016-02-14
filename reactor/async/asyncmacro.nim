@@ -14,7 +14,7 @@ template stopAsync*(): expr =
   # we will never be called again
   yield AsyncIterator(callback: nil)
 
-template awaitInIterator*(body: expr, errorFunc: expr): expr =
+template awaitInIterator*(body: expr, errorFunc: untyped): expr =
   let fut = body
   when fut is Future:
     assert fut.isImmediate or fut.completer != nil, "nil passed to await"
@@ -24,7 +24,7 @@ template awaitInIterator*(body: expr, errorFunc: expr): expr =
     {.error: "await on wrong type (expected Result or Future)".}
 
   if not fut.isSuccess:
-    let err = fut.getResult.error
+    let err = attachInstInfo(fut.getResult.error, instantiationInfo(-2))
     errorFunc(err)
     stopAsync()
 
@@ -103,7 +103,7 @@ macro async*(a): stmt =
     template await(e: expr): expr =
       awaitInIterator(e, asyncProcCompleter.completeError)
     template asyncRaise(e: expr): expr =
-      asyncProcCompleter.completeError(e)
+      asyncProcCompleter.completeError(attachInstInfo(e, instantiationInfo()))
       return
 
     when asyncProcCompleter is Completer[void]:
@@ -195,7 +195,7 @@ macro asyncIterator*(a): stmt =
       awaitInIterator(e, asyncProvider.sendClose)
 
     template asyncRaise(e: expr): expr =
-      asyncProvider.sendClose(e)
+      asyncProvider.sendClose(attachInstInfo(e, instantiationInfo()))
       return
 
     template asyncYield(e: expr): expr =
