@@ -7,8 +7,6 @@ proc bar() {.async.} =
   await foo()
 
 proc main() {.async.} =
-  #await bar()
-  let fut = tryAwait bar()
-  fut.error.printError
+  await bar()
 
-main().runLoop()
+main().runMain()

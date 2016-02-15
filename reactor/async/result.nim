@@ -8,7 +8,7 @@ type
     of false:
       error*: ref Exception
 
-  InstantationInfo* = tuple[filename: string, line: int]
+  InstantationInfo* = tuple[filename: string, line: int, procname: string]
 
   ExceptionMeta = ref object
     instInfo: InstantationInfo
@@ -22,17 +22,24 @@ when debugFutures:
     ensureInit(exceptionMeta)
     exceptionMeta.get(exc)
 
+  template extInstantiationInfo(depth: int= -1): expr =
+    let frame = getFrame()
+    let info = instantiationInfo(depth - 1)
+    (info.filename, info.line, $frame.procname).InstantationInfo
+
   proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
     ensureInit(exceptionMeta)
     let next = exceptionMeta.get(exc)
     let meta = ExceptionMeta(instInfo: info, next: next)
     result = exceptionMeta.copyWithValue(exc[], meta)
-    #echo "attached to ", exc.repr, " as ", result.repr, " test: ", result.getMeta.repr
 else:
   proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
     return exc
 
   proc getMeta(exc: ref Exception): ExceptionMeta = nil
+
+  proc extInstantiationInfo(depth: int= -1): InstantationInfo =
+    ("", 0, "")
 
 proc attachInstInfo(exc: string, info: InstantationInfo): ref Exception =
   attachInstInfo(newException(Exception, exc), info)
@@ -41,15 +48,16 @@ proc formatAsyncTrace(meta: ExceptionMeta): string =
   if meta == nil:
     return ""
   let info = meta.instInfo
-  let line = "$1($2)" % [info.filename, $info.line]
+  let fn = "$1($2)" % [info.filename, $info.line]
+  let line = fn & repeat(' ', 24 - fn.len) & " " & (info.procname)
   line & "\n" & formatAsyncTrace(meta.next)
 
 proc printError*(err: ref Exception) =
-  stderr.writeLine "Asynchronous exception: "
   stderr.writeLine err.getStackTrace
-  stderr.writeLine "Trace"
-  stderr.writeLine formatAsyncTrace(err.getMeta())
-  stderr.writeLine "Error: " & ($err.msg)
+  if err.getMeta() != nil:
+    stderr.writeLine "Asynchronous trace:"
+    stderr.writeLine formatAsyncTrace(err.getMeta())
+  stderr.writeLine "Error: " & ($err.msg) & " [" & $(err.name) & "]"
 
 proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess

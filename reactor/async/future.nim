@@ -264,3 +264,10 @@ proc runLoop*[T](f: Future[T]): T =
     loopRunning = runLoopOnce()
 
   f.get
+
+proc runMain*(f: Future[void]) =
+  try:
+    f.runLoop
+  except:
+    getCurrentException().printError
+    quit(1)

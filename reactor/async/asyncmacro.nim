@@ -24,7 +24,7 @@ template awaitInIterator*(body: expr, errorFunc: untyped): expr =
     {.error: "await on wrong type (expected Result or Future)".}
 
   if not fut.isSuccess:
-    let err = attachInstInfo(fut.getResult.error, instantiationInfo(-2))
+    let err = attachInstInfo(fut.getResult.error, extInstantiationInfo(-2))
     errorFunc(err)
     stopAsync()
 
@@ -103,7 +103,7 @@ macro async*(a): stmt =
     template await(e: expr): expr =
       awaitInIterator(e, asyncProcCompleter.completeError)
     template asyncRaise(e: expr): expr =
-      asyncProcCompleter.completeError(attachInstInfo(e, instantiationInfo()))
+      asyncProcCompleter.completeError(attachInstInfo(e, extInstantiationInfo()))
       return
 
     when asyncProcCompleter is Completer[void]:
@@ -195,7 +195,7 @@ macro asyncIterator*(a): stmt =
       awaitInIterator(e, asyncProvider.sendClose)
 
     template asyncRaise(e: expr): expr =
-      asyncProvider.sendClose(attachInstInfo(e, instantiationInfo()))
+      asyncProvider.sendClose(attachInstInfo(e, extInstantiationInfo()))
       return
 
     template asyncYield(e: expr): expr =
