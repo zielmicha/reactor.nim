@@ -99,11 +99,12 @@ proc intGenerator(limit: int): Stream[int] {.asyncIterator.} =
     asyncYield i
     i += 1
 
-intGenerator(5).forEach(proc(item: int) = echo "item ", item).runLoop()
+intGenerator(5).forEach(proc(item: int) = echo "item ", item).runMain()
 
 proc test1() {.async.} =
   let gen = intGenerator(40)
   asyncFor i in gen:
     echo "recv ", i
 
-test1().runLoop()
+
+test1().runMain()

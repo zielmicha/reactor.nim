@@ -155,7 +155,7 @@ macro asyncFor*(iterClause: expr, body: expr): stmt {.immediate.} =
     while true:
       let res = tryAwait receive(collection)
       if not res.isSuccess:
-        if res.error == JustClose:
+        if res.error.getOriginal of CloseException:
           break
         else:
           asyncRaise res.error

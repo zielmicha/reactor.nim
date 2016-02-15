@@ -23,7 +23,7 @@ type
   LengthStream*[T] = tuple[length: int64, stream: Stream[T]]
 
 let
-  JustClose* = new(CloseException)
+  JustClose* = (ref CloseException)(msg: "just close")
 
 proc getStream[T](s: Provider[T]): Stream[T] {.inline.} = Stream[T](s)
 
@@ -358,7 +358,7 @@ proc unwrapStreamFuture[T](f: Future[Stream[T]]): Stream[T] =
   return stream
 
 proc logClose*(err: ref Exception) =
-  if not (err of CloseException):
+  if not (err.getOriginal of CloseException):
     stderr.writeLine("Closing stream: " & err.msg)
 
 proc onErrorClose*(f: Future[void], p: Provider) =

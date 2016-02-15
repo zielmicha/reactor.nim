@@ -163,7 +163,7 @@ proc ignoreError*[Exc](f: Future[void], kind: typedesc[Exc]): Future[void] =
 
   onSuccessOrError[void](f, onSuccess=(proc() = complete(completer)),
                          onError=proc(t: ref Exception) =
-                                if t of Exc: complete(completer)
+                                if t.getOriginal of Exc: complete(completer)
                                 else: completer.completeError(t))
 
   return completer.getFuture
@@ -239,7 +239,7 @@ proc then*[T, R](f: Future[T], function: (proc(t:T): R)): auto =
   return thenWrapper[T, R](f, function)
 
 proc ignoreFailCb(t: ref Exception) =
-  stderr.writeLine("Error in ignored future: " & t.msg)
+  stderr.writeLine("Error in ignored future: " & t.getOriginal.msg)
 
 proc ignore*(f: Future[void]) =
   onSuccessOrError[void](f,
