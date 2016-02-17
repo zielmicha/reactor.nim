@@ -10,6 +10,7 @@ type MsgPipe* = ref object of Pipe[string]
   writeReq: ptr uv_write_t
   writingNow: uv_buf_t
   shutdownReq: ptr uv_shutdown_t
+  sendClosed: bool
   paused: bool
 
 proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
@@ -23,7 +24,7 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
   if nread < 0:
     self.inputProvider.sendClose(uvError(nread, "read stream"))
   else:
-    if self.inputProvider.isSendClosed:
+    if self.sendClosed:
       return
 
     assert nread <= self.buffer.len
@@ -48,6 +49,7 @@ proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
 
   if status < 0:
     self.inputProvider.sendClose(uvError(status, "stream write"))
+    self.sendClosed = true
   else:
     self.outputStream.discardItems(1)
     self.writeReady()

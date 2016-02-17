@@ -185,7 +185,7 @@ proc discardItems*[T](self: Stream[T], count: int) =
 
   self.queue.popFront(count)
 
-proc waitForData*[T](self: Stream[T]): Future[void] =
+proc waitForData*[T](self: Stream[T], allowSpurious=false): Future[void] =
   ## Waits until some data is available in the buffer. For use with `peekMany` and `discardItems`.
   if self.queue.len != 0:
     return now(just())
@@ -197,12 +197,33 @@ proc waitForData*[T](self: Stream[T]): Future[void] =
   var recvListenerId: CallbackId
 
   recvListenerId = self.onRecvReady.addListener(proc() =
-    if self.queue.len != 0:
+    if self.queue.len != 0 or allowSpurious:
       completer.complete()
       self.onRecvReady.removeListener(recvListenerId)
     elif self.sendClosed:
       completer.completeError(self.sendCloseException)
       self.onRecvReady.removeListener(recvListenerId))
+
+  return completer.getFuture
+
+proc waitForSpace*[T](self: Provider[T], allowSpurious=false): Future[void] =
+  ## Waits until space is available in the buffer. For use with `provideSome` and `freeBufferSize`.
+  if self.freeBufferSize != 0:
+    return now(just())
+
+  if sself.recvClosed:
+    return now(error(void, sself.recvCloseException))
+
+  let completer = newCompleter[void]()
+  var sendListenerId: CallbackId
+
+  sendListenerId = self.onSendReady.addListener(proc() =
+    if self.freeBufferSize != 0 or allowSpurious:
+      completer.complete()
+      self.onSendReady.removeListener(sendListenerId)
+    elif sself.recvClosed:
+      completer.completeError(sself.recvCloseException)
+      self.onSendReady.removeListener(sendListenerId))
 
   return completer.getFuture
 
@@ -243,7 +264,9 @@ proc receiveChunk[T, Ret](self: Stream[T], minn: int, maxn: int, returnType: typ
   recvListenerId = self.onRecvReady.addListener(proc() =
     offset += self.receiveSomeInto(res.asView.slice(offset))
     if offset >= minn:
-      completer.complete(getResult())
+      var res = getResult()
+      res.shallow()
+      completer.complete(res)
       self.onRecvReady.removeListener recvListenerId
       return
     if self.sendClosed:
@@ -361,8 +384,16 @@ proc logClose*(err: ref Exception) =
   if not (err.getOriginal of CloseException):
     stderr.writeLine("Closing stream: " & err.msg)
 
+# errorOnClose -> onErrorClose
+
 proc onErrorClose*(f: Future[void], p: Provider) =
   ## When future f completes with error, close provider p.
   f.onSuccessOrError(
     onSuccess=nothing1[void],
     onError=proc(t: ref Exception) = p.sendClose(t))
+
+proc onErrorClose*(f: Future[void], s: Stream) =
+  ## When future f completes with error, close stream s.
+  f.onSuccessOrError(
+    onSuccess=nothing1[void],
+    onError=proc(t: ref Exception) = s.recvClose(t))

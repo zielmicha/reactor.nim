@@ -122,17 +122,15 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
   else:
     return state.completer.getFuture
 
-proc connectTcp*(host: string, port: int): Future[TcpConnection] =
+proc connectTcp*(host: string, port: int): Future[TcpConnection] {.async.} =
   # TODO: add bindHost
 
-  proc resolved(addresses: seq[IpAddress]): Future[TcpConnection] =
-    if addresses.len == 0:
-      return immediateError[TcpConnection]("no address resolved")
-    else: # TODO: iterate over addresses
-      return connectTcp(addresses[0], port)
-
-  return resolveAddress(host).then(resolved)
+  let addresses = await resolveAddress(host)
+  if addresses.len == 0:
+    asyncRaise "no address resolved"
+  else: # TODO: iterate over addresses
+    return (await connectTcp(addresses[0], port))
 
 proc close*(t: TcpConnection, err: ref Exception) =
   # why close doesn't work without this?
-  (Pipe[byte])(t).close(err)
+  BytePipe(t).close(err)

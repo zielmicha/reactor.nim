@@ -19,7 +19,7 @@ include reactor/async/bytes
 include reactor/async/asyncutil
 
 import reactor/datatypes/basic
-export ConstView, View, ByteView, viewToConstView, seqView, basic.len, singleItemView
+export ConstView, View, ByteView, viewToConstView, seqView, basic.len, singleItemView, copyTo, copyFrom, addrView, slice
 
 when not compileOption("boundChecks"):
   {.warning: "compiling without boundChecks is dangerous and unsupported".}

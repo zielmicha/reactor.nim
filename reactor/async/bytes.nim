@@ -83,8 +83,12 @@ proc readUntil*(self: Stream[byte], chars: set[char], limit=high(int)): Future[s
         break
 
       if view.len == 0:
-        if (tryAwait self.waitForData).isError:
-          break
+        let status = (tryAwait self.waitForData)
+        if status.isError:
+          if line.len == 0:
+            asyncRaise status.error
+          else:
+            break
 
   return line
 
@@ -93,3 +97,7 @@ proc readUntilEof*(self: Stream[byte], limit=high(int)): Future[string] =
 
 proc readLine*(self: Stream[byte], limit=high(int)): Future[string] =
   return self.readUntil(chars={'\L'}, limit=limit)
+
+proc lines*(self: Stream[byte], limit=high(int)): Stream[string] {.asynciterator.} =
+  while true:
+    asyncYield (await self.readLine(limit=limit))

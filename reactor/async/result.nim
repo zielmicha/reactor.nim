@@ -1,3 +1,4 @@
+import typetraits
 
 type
   Result*[T] = object
@@ -13,10 +14,11 @@ type
   ExceptionMeta = ref object of Exception
     instInfo: InstantationInfo
     next: ExceptionMeta
+    original: ref Exception
 
 proc getOriginal*(exc: ref Exception): ref Exception =
   if exc of ExceptionMeta:
-    return exc.parent
+    return exc.ExceptionMeta.original.getOriginal
   else:
     return exc
 
@@ -33,8 +35,8 @@ when debugFutures:
       return nil
 
   proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
-    let meta = ExceptionMeta(instInfo: info, next: getMeta(exc))
-    meta.parent = exc.getOriginal
+    let meta = ExceptionMeta(instInfo: info, next: getMeta(exc), msg: "[exception proxy]")
+    meta.original = exc.getOriginal
     return meta
 else:
   proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
@@ -58,11 +60,12 @@ proc formatAsyncTrace(meta: ExceptionMeta): string =
   line & "\n" & formatAsyncTrace(meta.next)
 
 proc printError*(err: ref Exception) =
+  let org = err.getOriginal()
   stderr.writeLine err.getStackTrace
   if err.getMeta() != nil:
     stderr.writeLine "Asynchronous trace:"
     stderr.writeLine formatAsyncTrace(err.getMeta())
-  stderr.writeLine "Error: " & (if err.msg == nil: "nil" else: $err.msg) & " [" & $(err.name) & "]"
+  stderr.writeLine "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]"
 
 proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess
@@ -76,8 +79,13 @@ proc just*[T](r: T): Result[T] =
 proc just*(): Result[void] =
   Result[void](isSuccess: true)
 
-proc error*[T](typename: typedesc[T], theError: ref Exception): Result[T] =
+proc fillExceptionName*[Exc: ref Exception](exc: Exc) =
+  when not (Exc is ref Exception):
+    exc.name = name(type(exc))
+
+proc error*[T; Exc: ref Exception](typename: typedesc[T], theError: Exc): Result[T] =
   assert theError != nil
+  fillExceptionName(theError)
   Result[T](isSuccess: false, error: theError)
 
 proc error*[T](typename: typedesc[T], theError: string): Result[T] =

@@ -28,6 +28,10 @@ proc stringView*(s: var string): View[byte] =
   result.data = addr s[0]
   result.size = s.len
 
+proc addrView*(s: cstring, size: int): View[byte] =
+  result.data = cast[pointer](s)
+  result.size = size
+
 proc asView*(s: var string): auto = stringView(s)
 
 proc asView*(s: var seq): auto = seqView(s)

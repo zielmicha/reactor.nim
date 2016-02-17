@@ -59,3 +59,13 @@ proc newLengthStream*[T](data: seq[T]): LengthStream[T] =
 
 proc newLengthStream*(data: string): LengthStream[byte] =
   (data.len.int64, newConstStream(data))
+
+proc zip*[A](a: seq[Future[A]]): Future[seq[A]] {.async.} =
+  var res: seq[A] = @[]
+  for item in a:
+    res.add(tryAwait item)
+  return res
+
+proc zip*(a: seq[Future[void]]): Future[void] {.async.} =
+  for item in a:
+    await item
