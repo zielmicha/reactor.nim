@@ -1,3 +1,4 @@
+## This module implements support for event listeners. The Event type represents an event that can triggered and subscribed to.
 
 type
   CallbackId* = int64
@@ -32,6 +33,7 @@ proc removeAllListeners*[T](ev: Event[T]) =
   ev.callbacks = initTable[CallbackId, proc(arg: T)]()
 
 proc callListenerNow*[T](ev: Event[T], arg: T) =
+  ## Call listeners for event `ev` immediately.
   for k, v in ev.callbacks.pairs:
     when T is void:
       v()
@@ -39,9 +41,11 @@ proc callListenerNow*[T](ev: Event[T], arg: T) =
       v(arg)
 
 proc callListener*[T](ev: Event[T], arg: T) =
+  ## Call listeners for event `ev` in a next tick of the event loop.
   ev.executor.callback = proc() = ev.callListenerNow(arg)
   ev.executor.enable()
 
 proc callListener*(ev: Event[void]) =
+  ## Call listeners for event `ev` in a next tick of the event loop.
   ev.executor.callback = proc() = callListenerNow[void](ev)
   ev.executor.enable()
