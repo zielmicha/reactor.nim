@@ -87,7 +87,7 @@ type
     data*: pointer
   uv_stream_t* = uv_handle_t
   uv_tcp_t* = uv_handle_t
-  uv_udp_t* = pointer
+  uv_udp_t* = uv_handle_t
   uv_pipe_t* = pointer
   uv_tty_t* = pointer
   uv_poll_t* = uv_handle_t
@@ -328,9 +328,9 @@ proc uv_tcp_connect*(req: ptr uv_connect_t; handle: ptr uv_tcp_t;
                      `addr`: ptr SockAddr; cb: uv_connect_cb): cint {.importc.}
 
 type 
-  uv_udp_send_cb* = proc (req: ptr uv_udp_send_t; status: cint)
+  uv_udp_send_cb* = proc (req: ptr uv_udp_send_t; status: cint) {.cdecl.}
   uv_udp_recv_cb* = proc (handle: ptr uv_udp_t; nread: int;
-                          buf: ptr uv_buf_t; `addr`: ptr SockAddr; flags: cuint)
+                          buf: ptr uv_buf_t; `addr`: ptr SockAddr; flags: cuint) {.cdecl.}
   INNER_C_UNION_5221779730467212091* = object  {.union.}
     fd*: cint
     reserved*: array[4, pointer]

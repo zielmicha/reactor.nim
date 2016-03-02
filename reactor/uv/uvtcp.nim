@@ -118,7 +118,7 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), handle)
   let ret = uv_tcp_connect(connectReq, handle, state.sockaddress, connectCb)
   if ret < 0:
-    return immediateError[TcpConnection](uvError(ret, state.errMsg))
+    return now(error(TcpConnection, uvError(ret, state.errMsg)))
   else:
     return state.completer.getFuture
 
