@@ -87,10 +87,10 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
     {.error: "writing strings only supported for byte streams".}
 
   if sself.sendClosed:
-    return immediateError[void]("send side closed")
+    return now(error(void, "send side closed"))
 
   if sself.recvClosed:
-    return immediateError[void](sself.recvCloseException)
+    return now(error(void, sself.recvCloseException))
 
   when type(data) is string:
     var data = data
@@ -101,7 +101,7 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
 
   var offset = self.provideSome(dataView)
   if offset == data.len:
-    return immediateFuture()
+    return now(just())
 
   let completer = newCompleter[void]()
   var sendListenerId: CallbackId
@@ -132,10 +132,10 @@ proc provide*[T](self: Provider[T], item: T): Future[void] =
   var item = item
 
   if sself.recvClosed:
-    return immediateError[void](sself.recvCloseException)
+    return now(error(void, sself.recvCloseException))
 
   if self.provideSome(singleItemView(item)) == 1:
-    return immediateFuture()
+    return now(just())
 
   let completer = newCompleter[void]()
   var sendListenerId: CallbackId
@@ -252,10 +252,10 @@ proc receiveChunk[T, Ret](self: Stream[T], minn: int, maxn: int, returnType: typ
       res[0..<offset]
 
   if offset >= minn:
-    return immediateFuture(getResult())
+    return now(just(getResult()))
 
   if self.sendClosed:
-    return immediateError[Ret](self.sendCloseException)
+    return now(error(Ret, self.sendCloseException))
 
   let completer = newCompleter[Ret]()
 

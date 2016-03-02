@@ -47,6 +47,6 @@ proc resolveAddress*(hostname: string): Future[seq[IpAddress]] =
 
   let err = uv_getaddrinfo(getThreadUvLoop(), request, callbackWrapper, state.hostname, nil, nil)
   if err != 0:
-    return immediateError[seq[IpAddress]]("name resolution failed")
+    return now(error(seq[IpAddress], "name resolution failed"))
 
   return state.completer.getFuture

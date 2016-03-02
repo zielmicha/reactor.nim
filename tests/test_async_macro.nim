@@ -18,7 +18,7 @@ proc add5(num: Future[int]): Future[int] {.async.} =
   assert somelambda() == 5
 
   echo "start add5"
-  let a = await immediateFuture(5)
+  let a = await now(just(5))
   echo "got a ", a
   let b = await num
   echo "got b ", b
@@ -35,9 +35,9 @@ let my6 = add5(my1.getFuture)
 my1.complete(1)
 my6.then(proc(x: int) = echo "returned ", x).ignore()
 
-add5bis(immediateFuture(5)).then(proc(x: int) = echo "returned ", x).ignore()
+add5bis(now(just(5))).then(proc(x: int) = echo "returned ", x).ignore()
 
-add5(immediateError[int]("boom!")).ignore()
+add5(now(error(int, "boom!"))).ignore()
 
 foo().ignore()
 

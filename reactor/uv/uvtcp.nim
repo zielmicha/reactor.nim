@@ -73,7 +73,7 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
       if bindErr == UV_ENOPROTOOPT: # FIXME: windows
         continue
       if bindErr < 0:
-        return immediateError[TcpServer](uvError(bindErr, "bind [" & $address & "]:" & $port))
+        return now(error(TcpServer, uvError(bindErr, "bind [" & $address & "]:" & $port)))
       else:
         break
 
@@ -81,9 +81,9 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
 
     let listenErr = uv_listen(cast[ptr uv_stream_t](server), 5, onNewConnection)
     if listenErr < 0:
-      return immediateError[TcpServer](uvError(listenErr, "listen"))
+      return now(error(TcpServer, uvError(listenErr, "listen")))
 
-    return immediateFuture(serverObj)
+    return now(just(serverObj))
 
   return resolveAddress(host).then(resolved)
 

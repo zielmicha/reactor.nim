@@ -93,5 +93,5 @@ proc wait*(process: Process): Future[int] =
 
 proc waitForSuccess*(process: Process): Future[void] =
   process.wait().then(proc(code: int): Future[void] =
-                      if code != 0: return immediateError[void]("bad exit code $1 from $2" % [$code, $process.args])
-                      else: return immediateFuture())
+                      if code != 0: return now(error(void, "bad exit code $1 from $2" % [$code, $process.args]))
+                      else: return now(just()))
