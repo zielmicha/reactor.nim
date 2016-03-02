@@ -35,9 +35,9 @@ type
   SslStruct {.final, pure.} = object
   SslPtr* = ptr SslStruct
   PSslPtr* = ptr SslPtr
-  SslCtx* = SslPtr
+  SslCtx* = ptr object
   PSSL_METHOD* = SslPtr
-  PX509* = SslPtr
+  PX509* = ptr object
   PX509_NAME* = SslPtr
   PEVP_MD* = SslPtr
   EVP_PKEY* = SslPtr
@@ -256,6 +256,7 @@ proc SSL_CTX_free*(arg0: SslCtx){.cdecl, dynlib: DLLSSLName, importc.}
 proc SSL_CTX_set_verify*(s: SslCtx, mode: int, cb: proc (a: int, b: pointer): int {.cdecl.}){.cdecl, dynlib: DLLSSLName, importc.}
 proc SSL_get_verify_result*(ssl: SslPtr): int{.cdecl,
     dynlib: DLLSSLName, importc.}
+proc SSL_set_verify*(s: SslPtr, mode: int, cb: proc (a: int, b: pointer): int {.cdecl.}){.cdecl, dynlib: DLLSSLName, importc.}
 
 proc SSL_CTX_set_cipher_list*(s: SslCtx, ciphers: cstring): cint{.cdecl, dynlib: DLLSSLName, importc.}
 proc SSL_set_cipher_list*(s: SslPtr, ciphers: cstring): cint{.cdecl, dynlib: DLLSSLName, importc.}
@@ -281,8 +282,10 @@ proc SSL_CTX_set_ex_data*(ssl: SslCtx, idx: cint, arg: pointer): cint {.cdecl, d
 proc SSL_CTX_get_ex_data*(ssl: SslCtx, idx: cint): pointer {.cdecl, dynlib: DLLSSLName, importc.}
 
 proc SSL_get_ex_new_index*(argl: clong, argp: pointer, new_func: pointer, dup_func: pointer, free_func: pointer): cint {.cdecl, dynlib: DLLSSLName, importc.}
-proc SSL_set_ex_data*(ssl: SslCtx, idx: cint, arg: pointer): cint {.cdecl, dynlib: DLLSSLName, importc.}
-proc SSL_get_ex_data*(ssl: SslCtx, idx: cint): pointer {.cdecl, dynlib: DLLSSLName, importc.}
+proc SSL_set_ex_data*(ssl: SslPtr, idx: cint, arg: pointer): cint {.cdecl, dynlib: DLLSSLName, importc.}
+proc SSL_get_ex_data*(ssl: SslPtr, idx: cint): pointer {.cdecl, dynlib: DLLSSLName, importc.}
+
+proc SSL_get_peer_certificate*(ssl: SslPtr): PX509 {.cdecl, dynlib: DLLSSLName, importc.}
 
 proc SSL_shutdown*(ssl: SslPtr): cInt{.cdecl, dynlib: DLLSSLName, importc.}
 proc SSL_set_shutdown*(ssl: SslPtr, mode: cint) {.cdecl, dynlib: DLLSSLName, importc: "SSL_set_shutdown".}
@@ -413,143 +416,3 @@ proc SSL_set_bio*(ssl: SslPtr, rbio, wbio: BIO) {.cdecl,
 proc SSL_do_handshake*(ssl: SslPtr): cint {.cdecl,
     dynlib: DLLSSLName, importc: "SSL_do_handshake".}
 
-
-
-proc ErrClearError*(){.cdecl, dynlib: DLLUtilName, importc: "ERR_clear_error".}
-proc ErrFreeStrings*(){.cdecl, dynlib: DLLUtilName, importc: "ERR_free_strings".}
-proc ErrRemoveState*(pid: cInt){.cdecl, dynlib: DLLUtilName, importc: "ERR_remove_state".}
-
-when true:
-  discard
-else:
-  proc SslCtxSetCipherList*(arg0: PSSL_CTX, str: cstring): cInt{.cdecl,
-      dynlib: DLLSSLName, importc.}
-  proc SslCtxNew*(meth: PSSL_METHOD): PSSL_CTX{.cdecl,
-      dynlib: DLLSSLName, importc.}
-
-  proc SslSetFd*(s: PSSL, fd: cInt): cInt{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SslCTXCtrl*(ctx: PSSL_CTX, cmd: cInt, larg: int, parg: Pointer): int{.
-      cdecl, dynlib: DLLSSLName, importc.}
-
-  proc SSLSetMode*(s: PSSL, mode: int): int
-  proc SSLCTXGetMode*(ctx: PSSL_CTX): int
-  proc SSLGetMode*(s: PSSL): int
-  proc SslMethodV2*(): PSSL_METHOD{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SslMethodV3*(): PSSL_METHOD{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SslMethodTLSV1*(): PSSL_METHOD{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SslMethodV23*(): PSSL_METHOD{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SslCtxUsePrivateKey*(ctx: PSSL_CTX, pkey: SslPtr): cInt{.cdecl,
-      dynlib: DLLSSLName, importc.}
-  proc SslCtxUsePrivateKeyASN1*(pk: cInt, ctx: PSSL_CTX,
-      d: cstring, length: int): cInt{.cdecl, dynlib: DLLSSLName, importc.}
-
-  proc SslCtxUseCertificate*(ctx: PSSL_CTX, x: SslPtr): cInt{.cdecl,
-      dynlib: DLLSSLName, importc.}
-  proc SslCtxUseCertificateASN1*(ctx: PSSL_CTX, length: int, d: cstring): cInt{.
-      cdecl, dynlib: DLLSSLName, importc.}
-
-    #  function SslCtxUseCertificateChainFile(ctx: PSSL_CTX; const filename: PChar):cInt;
-  proc SslCtxUseCertificateChainFile*(ctx: PSSL_CTX, filename: cstring): cInt{.
-      cdecl, dynlib: DLLSSLName, importc.}
-  proc SslCtxSetDefaultPasswdCb*(ctx: PSSL_CTX, cb: PPasswdCb){.cdecl,
-      dynlib: DLLSSLName, importc.}
-  proc SslCtxSetDefaultPasswdCbUserdata*(ctx: PSSL_CTX, u: SslPtr){.cdecl,
-      dynlib: DLLSSLName, importc.}
-    #  function SslCtxLoadVerifyLocations(ctx: PSSL_CTX; const CAfile: PChar; const CApath: PChar):cInt;
-  proc SslCtxLoadVerifyLocations*(ctx: PSSL_CTX, CAfile: cstring, CApath: cstring): cInt{.
-      cdecl, dynlib: DLLSSLName, importc.}
-  proc SslNew*(ctx: PSSL_CTX): PSSL{.cdecl, dynlib: DLLSSLName, importc.}
-
-
-  proc SslConnect*(ssl: PSSL): cInt{.cdecl, dynlib: DLLSSLName, importc.}
-
-
-  proc SslGetVersion*(ssl: PSSL): cstring{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SslGetPeerCertificate*(ssl: PSSL): PX509{.cdecl, dynlib: DLLSSLName,
-      importc.}
-  proc SslCtxSetVerify*(ctx: PSSL_CTX, mode: cInt, arg2: PFunction){.cdecl,
-      dynlib: DLLSSLName, importc.}
-  proc SSLGetCurrentCipher*(s: PSSL): SslPtr{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SSLCipherGetName*(c: SslPtr): cstring{.cdecl, dynlib: DLLSSLName, importc.}
-  proc SSLCipherGetBits*(c: SslPtr, alg_bits: var cInt): cInt{.cdecl,
-      dynlib: DLLSSLName, importc.}
-  proc SSLGetVerifyResult*(ssl: PSSL): int{.cdecl, dynlib: DLLSSLName, importc.}
-    # libeay.dll
-  proc X509New*(): PX509{.cdecl, dynlib: DLLUtilName, importc.}
-  proc X509Free*(x: PX509){.cdecl, dynlib: DLLUtilName, importc.}
-  proc X509NameOneline*(a: PX509_NAME, buf: cstring, size: cInt): cstring{.
-      cdecl, dynlib: DLLUtilName, importc.}
-  proc X509GetSubjectName*(a: PX509): PX509_NAME{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc X509GetIssuerName*(a: PX509): PX509_NAME{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc X509NameHash*(x: PX509_NAME): int{.cdecl, dynlib: DLLUtilName, importc.}
-    #  function SslX509Digest(data: PX509; typ: PEVP_MD; md: PChar; len: PcInt):cInt;
-  proc X509Digest*(data: PX509, typ: PEVP_MD, md: cstring, length: var cInt): cInt{.
-      cdecl, dynlib: DLLUtilName, importc.}
-  proc X509print*(b: PBIO, a: PX509): cInt{.cdecl, dynlib: DLLUtilName, importc.}
-  proc X509SetVersion*(x: PX509, version: cInt): cInt{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc X509SetPubkey*(x: PX509, pkey: EVP_PKEY): cInt{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc X509SetIssuerName*(x: PX509, name: PX509_NAME): cInt{.cdecl,
-      dynlib: DLLUtilName, importc.}
-  proc X509NameAddEntryByTxt*(name: PX509_NAME, field: cstring, typ: cInt,
-                              bytes: cstring, length, loc, theSet: cInt): cInt{.
-      cdecl, dynlib: DLLUtilName, importc.}
-  proc X509Sign*(x: PX509, pkey: EVP_PKEY, md: PEVP_MD): cInt{.cdecl,
-      dynlib: DLLUtilName, importc.}
-  proc X509GmtimeAdj*(s: PASN1_UTCTIME, adj: cInt): PASN1_UTCTIME{.cdecl,
-      dynlib: DLLUtilName, importc.}
-  proc X509SetNotBefore*(x: PX509, tm: PASN1_UTCTIME): cInt{.cdecl,
-      dynlib: DLLUtilName, importc.}
-  proc X509SetNotAfter*(x: PX509, tm: PASN1_UTCTIME): cInt{.cdecl,
-      dynlib: DLLUtilName, importc.}
-  proc X509GetSerialNumber*(x: PX509): PASN1_cInt{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc EvpPkeyNew*(): EVP_PKEY{.cdecl, dynlib: DLLUtilName, importc.}
-  proc EvpPkeyFree*(pk: EVP_PKEY){.cdecl, dynlib: DLLUtilName, importc.}
-  proc EvpPkeyAssign*(pkey: EVP_PKEY, typ: cInt, key: Prsa): cInt{.cdecl,
-      dynlib: DLLUtilName, importc.}
-  proc EvpGetDigestByName*(Name: cstring): PEVP_MD{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc EVPcleanup*(){.cdecl, dynlib: DLLUtilName, importc.}
-    #  function ErrErrorString(e: cInt; buf: PChar): PChar;
-  proc SSLeayversion*(t: cInt): cstring{.cdecl, dynlib: DLLUtilName, importc.}
-
-
-  proc OPENSSLaddallalgorithms*(){.cdecl, dynlib: DLLUtilName, importc.}
-  proc CRYPTOcleanupAllExData*(){.cdecl, dynlib: DLLUtilName, importc.}
-  proc RandScreen*(){.cdecl, dynlib: DLLUtilName, importc.}
-
-  proc d2iPKCS12bio*(b: PBIO, Pkcs12: SslPtr): SslPtr{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc PKCS12parse*(p12: SslPtr, pass: cstring, pkey, cert, ca: var SslPtr): cint{.
-      dynlib: DLLUtilName, importc, cdecl.}
-
-  proc PKCS12free*(p12: SslPtr){.cdecl, dynlib: DLLUtilName, importc.}
-  proc RsaGenerateKey*(bits, e: cInt, callback: PFunction, cb_arg: SslPtr): PRSA{.
-      cdecl, dynlib: DLLUtilName, importc.}
-  proc Asn1UtctimeNew*(): PASN1_UTCTIME{.cdecl, dynlib: DLLUtilName, importc.}
-  proc Asn1UtctimeFree*(a: PASN1_UTCTIME){.cdecl, dynlib: DLLUtilName, importc.}
-  proc Asn1cIntSet*(a: PASN1_cInt, v: cInt): cInt{.cdecl, dynlib: DLLUtilName,
-      importc.}
-  proc i2dX509bio*(b: PBIO, x: PX509): cInt{.cdecl, dynlib: DLLUtilName, importc.}
-  proc i2dPrivateKeyBio*(b: PBIO, pkey: EVP_PKEY): cInt{.cdecl,
-      dynlib: DLLUtilName, importc.}
-    # 3DES functions
-  proc DESsetoddparity*(Key: des_cblock){.cdecl, dynlib: DLLUtilName, importc.}
-  proc DESsetkeychecked*(key: des_cblock, schedule: des_key_schedule): cInt{.
-      cdecl, dynlib: DLLUtilName, importc.}
-  proc DESecbencrypt*(Input: des_cblock, output: des_cblock, ks: des_key_schedule,
-                      enc: cInt){.cdecl, dynlib: DLLUtilName, importc.}
-  # implementation
-
-  proc SSLSetMode(s: PSSL, mode: int): int =
-    result = SSLctrl(s, SSL_CTRL_MODE, mode, nil)
-
-  proc SSLCTXGetMode(ctx: PSSL_CTX): int =
-    result = SSLCTXctrl(ctx, SSL_CTRL_MODE, 0, nil)
-
-  proc SSLGetMode(s: PSSL): int =
-    result = SSLctrl(s, SSL_CTRL_MODE, 0, nil)
