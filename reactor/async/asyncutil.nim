@@ -25,6 +25,48 @@ proc complete*[K, V](self: CompleterTable[K, V], id: K, value: V) =
       completer.complete(value)
     self.completers.del(id)
 
+# serial queue
+
+type
+  SerialQueue* = ref object
+    ## A queue that executes asynchronous functions serially
+    stream: Stream[proc(): Future[void]]
+    provider: Provider[proc(): Future[void]]
+
+proc queueHandler(q: SerialQueue) {.async.} =
+  asyncFor item in q.stream:
+    await item()
+
+proc newSerialQueue*(): SerialQueue =
+  let q = new(SerialQueue)
+  (q.stream, q.provider) = newStreamProviderPair[proc(): Future[void]]()
+  q.queueHandler().onErrorClose(q.stream)
+  return q
+
+proc enqueueInternal(q: SerialQueue, f: (proc(): Future[void])): Future[void] =
+  return q.provider.provide(f)
+
+proc enqueue*[T](q: SerialQueue, f: (proc(): Future[T])): Future[Future[T]] {.async.} =
+  ## Executes `f` serially after all functions pushed to `q`.
+  ## The outermost future completes where the task is actually pushed to the queue.
+  ## The innermost future completes when the task is actually complete.
+  let completer = newCompleter[T]()
+  let enq = q.enqueueInternal(proc(): Future[void] =
+    let queueCompleter = newCompleter[void]()
+    f().onSuccessOrError(
+      onSuccess=(proc(x: T) =
+                   when T is void:
+                     completer.complete()
+                   else:
+                     completer.complete(x)
+                   queueCompleter.complete()),
+      onError=(proc(err: ref Exception) =
+                 completer.completeError(err)
+                 queueCompleter.completeError(err)))
+    return queueCompleter.getFuture)
+
+  return completer.getFuture
+
 # forEach
 
 proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void] {.async.} =
