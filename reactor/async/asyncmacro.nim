@@ -60,7 +60,10 @@ proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
     return n
 
   if n.kind == nnkReturnStmt:
-    return newCall(newIdentNode(!"asyncReturn"), n[0])
+    if n[0].kind == nnkEmpty:
+      return newCall(newIdentNode(!"asyncReturn"))
+    else:
+      return newCall(newIdentNode(!"asyncReturn"), n[0])
 
   let node = n.copyNimTree
   for i in 0..<node.len:
