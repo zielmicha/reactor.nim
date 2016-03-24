@@ -117,7 +117,7 @@ macro defCommand*(sname: untyped, args: untyped, rettype: untyped): stmt =
     callArgs.add(newCall(newIdentNode("$"), name))
 
   let r = quote do:
-    proc `name` (): Future[`rettype`] =
+    proc `name`* (): Future[`rettype`] =
       client.call(@`callArgs`, `rettype`)
 
   defArgs[0] = r[0][3][0]
@@ -125,7 +125,7 @@ macro defCommand*(sname: untyped, args: untyped, rettype: untyped): stmt =
   return r
 
 defCommand("APPEND", [(key, string), (value, string)], int64)
-defCommand("AUTH", [(key, string), (value, string)], void)
+defCommand("AUTH", [(password, string)], void)
 defCommand("DEL", [(key, string)], int64)
 defCommand("DECR", [(key, string)], int64)
 defCommand("DECRBY", [(key, string), (decrby, int64)], int64)
@@ -142,7 +142,7 @@ defCommand("HGET", [(key, string), (field, string)], string)
 defCommand("HINCRBY", [(key, string), (field, string), (increment, int64)], int64)
 defCommand("HINCRBYFLOAT", [(key, string), (field, string), (increment, string)], string)
 #defCommand("HKEYS", [(key, string)], seq[string])
-defCommand("HSET", [(key, string), (field, string), (value, string)], string)
+defCommand("HSET", [(key, string), (field, string), (value, string)], int64)
 #defCommand("HVALS", [(key, string)], seq[string])
 defCommand("INCR", [(key, string)], int64)
 defCommand("INCRBY", [(key, string), (decrby, int64)], int64)

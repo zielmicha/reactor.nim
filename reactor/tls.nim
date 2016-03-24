@@ -144,6 +144,7 @@ proc handshakeAsClient*(self: TlsPipe, hostname: string=nil, verify=true) {.asyn
       asyncRaise "missing certificate (unexpected)"
 
     # TODO: verify hostnames!
+    # see: everything-you-wanted-to-know-about-openssl.pdf
 
   self.start()
 

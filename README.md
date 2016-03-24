@@ -8,9 +8,14 @@
 
 There is Emscripten/WebAssembly port planned.
 
+You can discuss reactor.nim on [Freenode #reactor.nim](https://webchat.freenode.net/?channels=reactor.nim).
 
 ## FAQ
 
 ### How do I report security bugs?
 
 Please email michal@zielinscy.org.pl.
+
+## Which platforms are supported?
+
+reactor.nim works on Linux and Mac OSX. Windows support should be trivial to add - see #3.

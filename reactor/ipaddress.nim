@@ -28,6 +28,18 @@ proc ipAddress*(a: array[16, char]): Ip6Address =
   var a = a
   copyMem(addr result, addr a, 16)
 
+proc ipAddress*(a: array[16, byte]): Ip6Address =
+  var a = a
+  copyMem(addr result, addr a, 16)
+
+proc ipAddress*(a: array[4, char]): Ip4Address =
+  var a = a
+  copyMem(addr result, addr a, 4)
+
+proc ipAddress*(a: array[4, byte]): Ip4Address =
+  var a = a
+  copyMem(addr result, addr a, 4)
+
 converter from4*(a: Ip4Address): IpAddress =
   result.kind = ip4
   result.ip4 = a

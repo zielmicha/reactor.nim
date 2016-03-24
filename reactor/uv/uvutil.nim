@@ -1,5 +1,5 @@
 import reactor/uv/uv, reactor/ipaddress, reactor/ipaddress
-import posix
+import posix, os
 
 export Sockaddr_storage
 
@@ -39,6 +39,10 @@ proc getThreadUvLoop*(): ptr uv_loop_t =
 
 proc uvError*(code: cint|int, info: string): ref Exception =
   return newException(Exception, info & ": " & $uv_strerror(code.cint))
+
+proc osError*(info: string): ref Exception =
+  let code = osLastError()
+  return newException(Exception, info & ": " & osErrorMsg(code))
 
 proc ipaddrToSockaddr*(address: ptr SockAddr, ip: IpAddress, port: int) =
   var ip = ip
