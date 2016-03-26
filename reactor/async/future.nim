@@ -255,7 +255,8 @@ proc then*[T, R](f: Future[T], function: (proc(t:T): R)): auto =
   return thenWrapper[T, R](f, function)
 
 proc ignoreFailCb(t: ref Exception) =
-  stderr.writeLine("Error in ignored future: " & t.getOriginal.msg)
+  stderr.writeLine("Error in ignored future")
+  t.printError
 
 proc ignore*(f: Future[void]) =
   ## Discard the future result.
@@ -269,6 +270,10 @@ proc ignore*[T](f: Future[T]) =
 
 proc completeError*(self: Completer, x: string) =
   self.completeError(newException(Exception, x))
+
+proc waitForever*(): Future[void] =
+  let completer = newCompleter[void]()
+  return completer.getFuture
 
 proc runLoop*[T](f: Future[T]): T =
   ## Run the event loop until Future `f` completes, return the value. If the Future completes with an error, raise it as an exception. Consider using `runMain` instead of this.
