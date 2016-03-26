@@ -1,4 +1,4 @@
-import strutils, macros
+import strutils, macros, times
 import reactor/async, reactor/tcp
 
 type
@@ -83,6 +83,7 @@ type
   RedisClient* = ref object
     pipe: BytePipe
     pipelineQueue: SerialQueue
+    enablePipelining*: bool
 
 proc wrapRedis*(pipe: BytePipe): RedisClient =
   ## Create Redis client from existing connection.
@@ -94,13 +95,29 @@ proc connect*(host: string="127.0.0.1", port: int=6379): Future[RedisClient] {.a
 
 proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[R] {.async.} =
   ## Perform a Redis call.
+  when defined(timeRedis):
+    let start = epochTime()
   let unserializeFunc = (proc(): Future[R] = unserialize(client.pipe.input, R))
-  let resp = await (client.pipelineQueue.enqueue(unserializeFunc))
-  await client.pipe.output.serialize(cmd)
+  let serializeFunc = (proc(): Future[void] = client.pipe.output.serialize(cmd))
+  # FIXME: this probably is not async-safe
+
+  var resp: Future[R]
+  if client.enablePipelining:
+    resp = (client.pipelineQueue.enqueue(serializeFunc, unserializeFunc))
+  else:
+    await serializeFunc()
+    resp = unserializeFunc()
+
   when R is void:
     await resp
   else:
-    return (await resp)
+    let val = (await resp)
+
+  when defined(timeRedis):
+    echo cmd[0], " took ", (epochTime() - start) * 1000, " ms"
+
+  when R is not void:
+    return val
 
 macro defCommand*(sname: untyped, args: untyped, rettype: untyped): stmt =
   let name = newIdentNode(sname.strVal.toLower)

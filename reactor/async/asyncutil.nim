@@ -28,32 +28,45 @@ proc complete*[K, V](self: CompleterTable[K, V], id: K, value: V) =
 # serial queue
 
 type
+  SerialQueueItem = ref object # FIXME: object without ref causes problems with sizeof
+    before: (proc(): Future[void])
+    after: (proc(): Future[void])
+
   SerialQueue* = ref object
     ## A queue that executes asynchronous functions serially
-    stream: Stream[proc(): Future[void]]
-    provider: Provider[proc(): Future[void]]
+    streamBefore: Stream[SerialQueueItem]
+    providerBefore: Provider[SerialQueueItem]
+    streamAfter: Stream[proc(): Future[void]]
+    providerAfter: Provider[proc(): Future[void]]
 
-proc queueHandler(q: SerialQueue) {.async.} =
-  asyncFor item in q.stream:
+proc queueHandlerBefore(q: SerialQueue) {.async.} =
+  asyncFor item in q.streamBefore:
+    await item.before()
+    await q.providerAfter.provide(item.after)
+
+proc queueHandlerAfter(q: SerialQueue) {.async.} =
+  asyncFor item in q.streamAfter:
     await item()
 
 proc newSerialQueue*(): SerialQueue =
   let q = new(SerialQueue)
-  (q.stream, q.provider) = newStreamProviderPair[proc(): Future[void]]()
-  q.queueHandler().onErrorClose(q.stream)
+  (q.streamBefore, q.providerBefore) = newStreamProviderPair[SerialQueueItem]()
+  (q.streamAfter, q.providerAfter) = newStreamProviderPair[proc(): Future[void]]()
+  q.queueHandlerBefore().onErrorClose(q.streamBefore)
+  q.queueHandlerAfter().onErrorClose(q.streamAfter)
   return q
 
-proc enqueueInternal(q: SerialQueue, f: (proc(): Future[void])): Future[void] =
-  return q.provider.provide(f)
+proc enqueueInternal(q: SerialQueue, before: (proc(): Future[void]), after: (proc(): Future[void])): Future[void] =
+  return q.providerBefore.provide(SerialQueueItem(before: before, after: after))
 
-proc enqueue*[T](q: SerialQueue, f: (proc(): Future[T])): Future[Future[T]] {.async.} =
-  ## Executes `f` serially after all functions pushed to `q`.
-  ## The outermost future completes where the task is actually pushed to the queue.
-  ## The innermost future completes when the task is actually complete.
+proc enqueue*[T](q: SerialQueue, before: (proc(): Future[void]), after: (proc(): Future[T])): Future[T] {.async.} =
+  ## Executes all `before`s and `after`s in the same order. Additionally, if `enqueue` A is executed before `enqueue` B
+  ## functions from A will be executed before functions from `B`.
   let completer = newCompleter[T]()
-  let enq = q.enqueueInternal(proc(): Future[void] =
+
+  proc afterProc(): Future[void] =
     let queueCompleter = newCompleter[void]()
-    f().onSuccessOrError(
+    after().onSuccessOrError(
       onSuccess=(proc(x: T) =
                    when T is void:
                      completer.complete()
@@ -63,9 +76,15 @@ proc enqueue*[T](q: SerialQueue, f: (proc(): Future[T])): Future[Future[T]] {.as
       onError=(proc(err: ref Exception) =
                  completer.completeError(err)
                  queueCompleter.completeError(err)))
-    return queueCompleter.getFuture)
 
-  return completer.getFuture
+    return queueCompleter.getFuture
+
+  await q.enqueueInternal(before, afterProc)
+
+  when T is void:
+    await completer.getFuture
+  else:
+    return (await completer.getFuture)
 
 # forEach
 
