@@ -5,7 +5,12 @@ discard """@[5, 6]
 1
 2
 3
-Error in ignored future: reader closed"""
+Error in ignored future
+
+Asynchronous trace:
+test_streams_close.nim(44) test3
+
+Error: reader closed [Exception]"""
 
 import reactor/async, reactor/loop
 

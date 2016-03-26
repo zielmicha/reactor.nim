@@ -6,7 +6,12 @@ returned 6
 returned 10
 start add5
 got a 5
-Error in ignored future: boom!"""
+Error in ignored future
+
+Asynchronous trace:
+test_async_macro.nim(28) add5
+
+Error: boom! [Exception]"""
 
 import reactor/async, reactor/loop
 
