@@ -126,3 +126,19 @@ proc parseInterface*(a: string): IpInterface =
     raise newException(ValueError, "invalid interface mask")
 
   return (address: address, mask: length)
+
+proc contains*[T: Ip4Address | Ip6Address](s: Interface[T], ip: T): bool =
+  for i in 0..<s.mask:
+    if s.address.getBit(i) != ip.getBit(i):
+      return false
+  return true
+
+proc contains*(s: IpInterface, i: IpAddress): bool =
+  if s.address.kind != i.kind:
+    return false
+
+  case s.address.kind:
+    of ip4:
+      return contains((s.address.ip4, s.mask), i.ip4)
+    of ip6:
+      return contains((s.address.ip6, s.mask), i.ip6)
