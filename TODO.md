@@ -14,6 +14,7 @@
 * show all currently running coroutines
 * Future should be non nil or something
 * httpclient connection pool support
+* stdlib asyncdispatch compat
 
 ### TODO (asyncmacro)
 * `yield` to `asyncYield`

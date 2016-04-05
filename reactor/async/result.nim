@@ -65,7 +65,10 @@ proc printError*(err: ref Exception) =
   if err.getMeta() != nil:
     stderr.writeLine "Asynchronous trace:"
     stderr.writeLine formatAsyncTrace(err.getMeta())
-  stderr.writeLine "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]"
+  if org == nil:
+    stderr.writeLine "Error: unknown"
+  else:
+    stderr.writeLine "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]"
 
 proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess
