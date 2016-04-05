@@ -5,6 +5,9 @@ export Sockaddr_storage
 
 type UVError* = object of Exception
 
+when not compileOption("threads"):
+  {.error: "Please compile with --threads:on (libuv requires pthreads even if you don't use threads)".}
+
 template checkZero*(name, e) =
   if e != 0:
     raise newException(UVError, "call to " & name & " failed")
