@@ -56,17 +56,17 @@ proc ptrAdd[T](p: pointer, i: int): ptr T =
   return cast[ptr T](cast[int](p) +% (i * sizeof(T)))
 
 proc `[]`*[T](v: ConstView[T], i: int): T =
-  assert(i >= 0 and i < v.size)
+  doAssert(i >= 0 and i < v.size)
   return ptrAdd[T](v.data, i)[]
 
 proc `[]`*[T](v: View[T], i: int): var T =
-  assert(i >= 0 and i < v.size)
+  doAssert(i >= 0 and i < v.size)
   return ptrAdd[T](v.data, i)[]
 
 proc slice*[T](v: SomeView[T], start: int, size: int): SomeView[T] =
   if start != 0:
-    assert start < v.len and start >= 0
-  assert size >= 0 and start + size <= v.len
+    doAssert(start < v.len and start >= 0)
+  doAssert(size >= 0 and start + size <= v.len)
   result.data = ptrAdd[T](v.data, start)
   result.size = size
 
