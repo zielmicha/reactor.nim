@@ -66,7 +66,7 @@ proc printError*(err: ref Exception) =
     stderr.writeLine "Asynchronous trace:"
     stderr.writeLine formatAsyncTrace(err.getMeta())
   if org == nil:
-    stderr.writeLine "Error: unknown"
+    stderr.writeLine "Error: unknown (original exception: " & (if err == nil: "nil" else: err.repr) & ")"
   else:
     stderr.writeLine "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]"
 

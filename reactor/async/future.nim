@@ -97,6 +97,8 @@ proc getResult*[T](self: Future[T]): Result[T] =
   if self.isImmediate:
     when T is not void:
       return just(self.value)
+    else:
+      return just()
   else:
     assert self.completer.isFinished
     self.completer.consumed = true
