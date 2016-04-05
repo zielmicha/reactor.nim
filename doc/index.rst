@@ -32,6 +32,10 @@ Modules
 
   Sleep asynchronously.
 
+- ``reactor/threading`` (`API docs <api/reactor/threading.html>`_)
+
+  Execute blocking tasks in a thread pool.
+
 - ``reactor/ipaddress`` (`API docs <api/reactor/ipaddress.html>`_)
 
   Parse and manipulate IPv4/IPv6 addresses.
