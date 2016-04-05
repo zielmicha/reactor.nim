@@ -12,6 +12,7 @@
 * Future should be non nil or something
 * httpclient connection pool support
 * stdlib asyncdispatch compat
+* Redis: autoreconnect
 
 ### TODO (asyncmacro)
 * `yield` to `asyncYield`

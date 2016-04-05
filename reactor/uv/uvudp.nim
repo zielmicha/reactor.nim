@@ -49,6 +49,8 @@ proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {
   buf.len = suggestedSize
 
 proc recvCb(handle: ptr uv_udp_t; nread: int; buf: ptr uv_buf_t; `addr`: ptr SockAddr; flags: cuint) {.cdecl.} =
+  defer: dealloc(buf.base)
+
   if handle.data == nil:
     return
 
@@ -59,7 +61,6 @@ proc recvCb(handle: ptr uv_udp_t; nread: int; buf: ptr uv_buf_t; `addr`: ptr Soc
   let packet = UdpPacket()
   packet.data = newString(nread)
   copyMem(addr packet.data[0], buf.base, nread)
-  dealloc(buf.base)
   packet.source = sockaddrToIpaddr(`addr`)
 
   if socket.inputProvider.freeBufferSize > 0:
