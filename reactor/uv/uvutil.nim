@@ -44,6 +44,11 @@ proc osError*(info: string): ref Exception =
   let code = osLastError()
   return newException(Exception, info & ": " & osErrorMsg(code))
 
+when not compiles(htons(cast[InPort](0))):
+  # Nim >0.13.0 compat
+  proc htons(port: InPort): InPort =
+    return cast[InPort](htons(cast[int16](port)))
+
 proc ipaddrToSockaddr*(address: ptr SockAddr, ip: IpAddress, port: int) =
   var ip = ip
   case ip.kind:

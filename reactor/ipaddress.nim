@@ -24,6 +24,9 @@ type
 proc ipAddress*(a: int32): Ip4Address =
   copyMem(addr result, a.unsafeAddr, 4)
 
+proc ipAddress*(a: uint32): Ip4Address =
+  copyMem(addr result, a.unsafeAddr, 4)
+
 proc ipAddress*(a: array[16, char]): Ip6Address =
   var a = a
   copyMem(addr result, addr a, 16)
