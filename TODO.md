@@ -6,11 +6,8 @@
 
 ### TODO
 * optimize `then` for immediate futures
-* close UV streams
-* stacktraces in futures
 * add variant of `map` for function returning `Future`s
 * `TaskQueue` for cancellation and concurrency limitation
-* slice should probably use doAssert
 * show all currently running coroutines
 * Future should be non nil or something
 * httpclient connection pool support
