@@ -11,7 +11,7 @@ Introduction
 
 *reactor.nim* currently works on Linux and Mac OSX. Other platforms supported by libuv and Nim (like Windows) support should be trivial to add - see issue `#3 <https://github.com/zielmicha/reactor.nim/issues/3>`_.
 
-The library is currently in development. You probably shouldn't use it yet for any mission critical applications. The documentation is currently sparse. For now you can look at `tests <https://github.com/zielmicha/reactor.nim/tree/master/tests>`_.
+The library is currently in development. You probably shouldn't use it yet for any mission critical applications. The documentation is currently sparse. For now you can look at `examples <https://github.com/zielmicha/reactor.nim/tree/master/examples>`_ and `tests <https://github.com/zielmicha/reactor.nim/tree/master/tests>`_.
 
 As you are probably going to deal with untrusted data, you should enable range checks even if compiling in release mode - see example `nim.cfg <https://github.com/zielmicha/reactor.nim/blob/master/nim.cfg>`_. *reactor.nim* treats security very seriously.
 
