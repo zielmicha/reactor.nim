@@ -1,5 +1,5 @@
 import strutils, macros, times
-import reactor/async, reactor/tcp
+import reactor/async, reactor/tcp, reactor/time
 
 type
   RedisError* = object of Exception
@@ -81,32 +81,44 @@ proc serialize*(output: ByteProvider, val: string): Future[void] {.async.} =
 
 type
   RedisClient* = ref object
-    pipe: BytePipe
+    pipe*: BytePipe
     pipelineQueue: SerialQueue
-    enablePipelining*: bool
+    connectProc: (proc(client: RedisClient): Future[void])
+    reconnectFlag: bool
 
-proc wrapRedis*(pipe: BytePipe): RedisClient =
-  ## Create Redis client from existing connection.
-  RedisClient(pipe: pipe, pipelineQueue: newSerialQueue())
+proc wrapRedis*(connectProc: (proc(client: RedisClient): Future[void]), reconnect=false): RedisClient =
+  ## Create Redis client from existing connection. connectProc should assign connection to `pipe` attribute of `client`.
+  RedisClient(pipelineQueue: newSerialQueue(), connectProc: connectProc, reconnectFlag: reconnect)
 
-proc connect*(host: string="127.0.0.1", port: int=6379): Future[RedisClient] {.async.} =
-  ## Connect to Redis TCP instance.
-  return wrapRedis(await connectTcp(host, port))
+proc reconnect*(client: RedisClient) {.async} =
+  if not client.reconnectFlag and client.pipe != nil:
+    return
+
+  while true:
+    let fut = (client.connectProc)(client)
+    let ret = tryAwait fut
+    if ret.isError:
+      stderr.writeLine("connection to Redis failed: " & ($ret))
+      await asyncSleep(1000)
+    else:
+      break
 
 proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[R] {.async.} =
   ## Perform a Redis call.
   when defined(timeRedis):
     let start = epochTime()
-  let unserializeFunc = (proc(): Future[R] = unserialize(client.pipe.input, R))
-  let serializeFunc = (proc(): Future[void] = client.pipe.output.serialize(cmd))
-  # FIXME: this probably is not async-safe
+
+  if client.pipe == nil or client.pipe.output.isRecvClosed:
+    await client.reconnect()
 
   var resp: Future[R]
-  if client.enablePipelining:
+  when defined(enableRedisPipelining):
+    let unserializeFunc = (proc(): Future[R] = unserialize(client.pipe.input, R))
+    let serializeFunc = (proc(): Future[void] = client.pipe.output.serialize(cmd))
     resp = (client.pipelineQueue.enqueue(serializeFunc, unserializeFunc))
   else:
-    await serializeFunc()
-    resp = unserializeFunc()
+    await client.pipe.output.serialize(cmd)
+    resp = unserialize(client.pipe.input, R)
 
   when R is void:
     await resp
@@ -165,9 +177,19 @@ defCommand("INCR", [(key, string)], int64)
 defCommand("INCRBY", [(key, string), (decrby, int64)], int64)
 #defCommand("KEYS", [(pattern, string)], seq[string])
 
+proc connectProc(client: RedisClient, host: string, port: int, password: string) {.async.} =
+  client.pipe = await connectTcp(host, port)
+  if password != nil:
+    await client.auth(password)
+
+proc connect*(host: string="127.0.0.1", port: int=6379, password: string = nil, reconnect=false): Future[RedisClient] {.async.} =
+  ## Connect to Redis TCP instance.
+
+  return wrapRedis(proc(client: RedisClient): Future[void] = connectProc(client, host, port, password))
+
 when isMainModule:
   proc main() {.async.} =
-    let redis = await connect()
+    let redis = await connect(reconnect=true)
     redis.append("reactor-test:list", "100").await.echo
 
   main().runMain()
