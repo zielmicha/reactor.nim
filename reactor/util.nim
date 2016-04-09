@@ -12,10 +12,13 @@ proc nothing1*[T](t: T) {.procvar.} = return
 proc baseBufferSizeFor*[T](v: typedesc[T]): int =
   when v is ref or v is seq or v is string or v is object:
     return 1
-  elif sizeof(T) > 1024:
+  elif not compiles(sizeof(T)):
     return 1
   else:
-    return int(1024 / sizeof(v))
+    when sizeof(T) > 1024:
+      return 1
+    else:
+      return int(1024 / sizeof(v))
 
 template returnMaybeVoid*(e: expr): stmt =
   if type(e) is void:

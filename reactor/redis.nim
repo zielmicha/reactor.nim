@@ -56,7 +56,7 @@ proc unserialize*[T](stream: ByteStream, typ: typedesc[seq[T]]): Future[seq[T]] 
       return nil
     var resp: seq[T] = @[]
     for i in 0..<(len.int):
-      resp.add(await unserialize(stream, typ))
+      resp.add(await unserialize(stream, T))
     return resp
   else:
     asyncRaise newException(RedisError, "unexpected type")
@@ -90,7 +90,7 @@ proc wrapRedis*(connectProc: (proc(client: RedisClient): Future[void]), reconnec
   ## Create Redis client from existing connection. connectProc should assign connection to `pipe` attribute of `client`.
   RedisClient(pipelineQueue: newSerialQueue(), connectProc: connectProc, reconnectFlag: reconnect)
 
-proc reconnect*(client: RedisClient) {.async} =
+proc reconnect*(client: RedisClient) {.async.} =
   if not client.reconnectFlag and client.pipe != nil:
     return
 
@@ -176,6 +176,59 @@ defCommand("HSET", [(key, string), (field, string), (value, string)], int64)
 defCommand("INCR", [(key, string)], int64)
 defCommand("INCRBY", [(key, string), (decrby, int64)], int64)
 #defCommand("KEYS", [(pattern, string)], seq[string])
+defCommand("PUBLISH", [(channel, string), (message, string)], int64)
+
+type
+  RedisMessage* = object
+    channel*: string
+    message*: string
+
+proc expectSubscribeConfirmation(stream: ByteStream) {.async.} =
+  let ch = (await stream.read(1))
+  if ch == "*":
+    let len = (await stream.readInt())
+    if len != 3:
+      asyncRaise newException(RedisError, "unexpected array length")
+    if (await unserialize(stream, string)) != "subscribe":
+      asyncRaise newException(RedisError, "unexpected event")
+    discard (await unserialize(stream, string))
+    discard (await unserialize(stream, int))
+  else:
+    asyncRaise newException(RedisError, "unexpected type")
+
+proc pubsubStart(client: RedisClient, channels: seq[string]) {.async.} =
+  await client.pipe.output.serialize(@["SUBSCRIBE"] & channels)
+
+  for ch in channels:
+    await client.pipe.input.expectSubscribeConfirmation()
+
+proc pubsub*(client: RedisClient, channels: seq[string]): Stream[RedisMessage] {.asynciterator.} =
+  ## Start listening for PUBSUB messages on channels `channels`.
+  var reconnect = false
+  while true:
+    if client.pipe == nil or client.pipe.output.isRecvClosed or reconnect:
+      if not client.reconnectFlag and client.pipe != nil:
+        asyncRaise "socket closed"
+
+      await client.reconnect()
+      reconnect = false
+      if (tryAwait client.pubsubStart(channels)).isError:
+        stderr.writeLine "Could not start pubsub channel"
+        reconnect = true
+        continue
+
+    let fut: Future[seq[string]] = unserialize(client.pipe.input, seq[string])
+    let respR = tryAwait fut
+    if respR.isError:
+      stderr.writeLine("pubsub channel disconnected (" & $respR & ")")
+      await asyncSleep(500)
+      reconnect = true
+      continue
+
+    let resp: seq[string] = respR.get
+    if resp[0] == "message":
+      asyncYield RedisMessage(channel: resp[1], message: resp[2])
+
 
 proc connectProc(client: RedisClient, host: string, port: int, password: string) {.async.} =
   client.pipe = await connectTcp(host, port)
@@ -185,11 +238,23 @@ proc connectProc(client: RedisClient, host: string, port: int, password: string)
 proc connect*(host: string="127.0.0.1", port: int=6379, password: string = nil, reconnect=false): Future[RedisClient] {.async.} =
   ## Connect to Redis TCP instance.
 
-  return wrapRedis(proc(client: RedisClient): Future[void] = connectProc(client, host, port, password))
+  return wrapRedis((proc(client: RedisClient): Future[void] = connectProc(client, host, port, password)), reconnect=reconnect)
 
 when isMainModule:
+  proc startListening() {.async.} =
+    let redis = await connect(reconnect=true)
+    let messages = redis.pubsub(@["foo"])
+    asyncFor item in messages:
+      echo "got message: ", item
+
   proc main() {.async.} =
+    echo "running..."
+    startListening().ignore()
     let redis = await connect(reconnect=true)
     redis.append("reactor-test:list", "100").await.echo
+
+    while true:
+      await asyncSleep(500)
+      discard (await redis.publish("foo", "hello"))
 
   main().runMain()
