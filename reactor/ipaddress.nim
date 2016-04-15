@@ -21,6 +21,18 @@ type
 
   IpInterface* = Interface[IpAddress]
 
+proc toBinaryString*(s: Ip4Address | Ip6Address): string =
+  const size = s.high - s.low + 1
+  result = newString(size)
+  copyMem(result.cstring, unsafeAddr(s), size)
+
+proc toBinaryString*(s: IpAddress): string =
+  case s.kind:
+    of ip4:
+      return s.ip4.toBinaryString
+    of ip6:
+      return s.ip6.toBinaryString
+
 proc ipAddress*(a: int32): Ip4Address =
   copyMem(addr result, a.unsafeAddr, 4)
 
