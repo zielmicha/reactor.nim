@@ -53,7 +53,7 @@ proc convertEndian(size: static[int], dst: pointer, src: pointer, endian=bigEndi
 
 proc pack*[T](v: T, endian=bigEndian): string {.inline.} =
   result = newString(sizeof(v))
-  convertEndian(sizeof(T), addr result[0], unsafeAddr v)
+  convertEndian(sizeof(T), addr result[0], unsafeAddr v, endian=endian)
 
 proc unpack*[T](v: string, t: typedesc[T], endian=bigEndian): T {.inline.} =
   if v.len < sizeof(T):
