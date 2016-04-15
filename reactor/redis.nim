@@ -214,6 +214,7 @@ proc pubsub*(client: RedisClient, channels: seq[string]): Stream[RedisMessage] {
       reconnect = false
       if (tryAwait client.pubsubStart(channels)).isError:
         stderr.writeLine "Could not start pubsub channel"
+        await asyncSleep(500)
         reconnect = true
         continue
 
