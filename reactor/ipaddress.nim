@@ -142,6 +142,17 @@ proc parseInterface*(a: string): IpInterface =
 
   return (address: address, mask: length)
 
+proc makeMaskAddress4*(mask: int): Ip4Address =
+  var arr: array[4, uint8]
+  var mask = mask
+  var index = 0
+  while mask > 8:
+    arr[index] = 0xFF
+    mask -= 8
+    index += 1
+  arr[index] = uint8(0xff xor ((1 shr (8 - mask)) - 1))
+  return arr.Ip4Address
+
 proc contains*[T: Ip4Address | Ip6Address](s: Interface[T], ip: T): bool =
   for i in 0..<s.mask:
     if s.address.getBit(i) != ip.getBit(i):
