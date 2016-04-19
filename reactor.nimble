@@ -7,3 +7,4 @@ license       = "MIT"
 
 [Deps]
 Requires: "nim >= 0.13.1"
+Requires: "collections >= 0.1.0"
