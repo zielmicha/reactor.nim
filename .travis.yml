@@ -24,6 +24,7 @@ install:
     ./koch boot -d:release
     cd ..
   - |
+    export PATH="$PWD/nim-devel/bin:$HOME/.nimble/bin:$PATH"
     # Get Nimble
     git clone https://github.com/nim-lang/nimble
     cd nimble
@@ -32,7 +33,7 @@ install:
     cd ..
 before_script:
   # Add the 'bin' folder to PATH
-  - export PATH="nim-devel/bin:$HOME/.nimble/bin:$PATH"
+  - export PATH="$PWD/nim-devel/bin:$HOME/.nimble/bin:$PATH"
 script:
   - nimble install -y
   - python3 bin/runtests.py
