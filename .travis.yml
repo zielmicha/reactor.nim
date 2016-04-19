@@ -28,7 +28,7 @@ install:
     git clone https://github.com/nim-lang/nimble
     cd nimble
     # Build it
-    nim-devel/bin/nim -d:release c -r src/nimble install
+    ../nim-devel/bin/nim -d:release c -r src/nimble install
     cd ..
 before_script:
   # Add the 'bin' folder to PATH
