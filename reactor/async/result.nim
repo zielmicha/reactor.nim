@@ -127,6 +127,13 @@ proc onSuccessOrErrorR*(f: Result[void], onSuccess: (proc()), onError: (proc(t:r
   else:
     onError(f.error)
 
+template catchError*(e: expr): expr =
+  ## Converts errors from `e` into error(...) and other results into just(e)
+  try:
+    just(e)
+  except:
+    error(type(e), getCurrentException())
+
 # Future compat
 
 proc getResult*(r: Result): auto = r
