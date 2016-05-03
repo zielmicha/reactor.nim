@@ -1,6 +1,2 @@
-import reactor/async
-
-export Future, Completer, getFuture, newCompleter
-
-export Future, Stream, Provider, Pipe
-export ByteStream, ByteProvider, BytePipe
+import reactor/async, reactor/loop, reactor/time, reactor/threading, reactor/ipaddress, reactor/resolv, reactor/tcp, reactor/udp
+export async, loop, time, threading, ipaddress, resolv, tcp, udp

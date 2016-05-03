@@ -11,7 +11,8 @@ proc openTunFd(name: string): Result[cint] =
   var req: ifreq
   var name = name
   zeroMem(addr req, sizeof req)
-  req.ifr_ifru.ifru_flags = IFF_TUN
+  # Open TUN without packet headers
+  req.ifr_ifru.ifru_flags = IFF_TUN or IFF_NO_PI
   copyMem(addr req.ifrn_name, addr name[0], min(sizeof(req.ifrn_name) - 1, name.len))
   if ioctl(fd, TUNSETIFF.uint, addr req) < 0:
     return error(cint, osError("ioctl tun"))

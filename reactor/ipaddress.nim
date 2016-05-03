@@ -1,4 +1,5 @@
-import strutils, sequtils, future
+import strutils, sequtils, future, hashes
+import collections/bytes
 
 type
   Interface*[T] = tuple[address: T, mask: int]
@@ -153,6 +154,21 @@ proc makeMaskAddress4*(mask: int): Ip4Address =
   arr[index] = uint8(0xff xor ((1 shr (8 - mask)) - 1))
   return arr.Ip4Address
 
+proc `==`*(a: Ip4Address, b: Ip4Address): bool =
+  return (array[4, uint8])(a) == (array[4, uint8])(b)
+
+proc `==`*(a: Ip6Address, b: Ip6Address): bool =
+  return (array[16, uint8])(a) == (array[16, uint8])(b)
+
+proc `==`*(a: IpAddress, b: IpAddress): bool =
+  if a.kind != b.kind:
+    return
+  case a.kind:
+    of ip4:
+      return a.ip4 == b.ip4
+    of ip6:
+      return a.ip6 == b.ip6
+
 proc contains*[T: Ip4Address | Ip6Address](s: Interface[T], ip: T): bool =
   for i in 0..<s.mask:
     if s.address.getBit(i) != ip.getBit(i):
@@ -168,3 +184,34 @@ proc contains*(s: IpInterface, i: IpAddress): bool =
       return contains((s.address.ip4, s.mask), i.ip4)
     of ip6:
       return contains((s.address.ip6, s.mask), i.ip6)
+
+proc nthAddress*(i: IpInterface, n: int64): IpAddress =
+  if n < 0 or (i.mask < 63 and (1 shl i.mask) <= n):
+    raise newException(ValueError, "address out of network range")
+
+  template mixAddr(address, length) =
+    var target = array[length, uint8](address)
+    var mask = i.mask
+    var i = rest.len - 1
+    while mask > 0:
+      let cmask = ((1 shl max(mask, 8)) - 1).uint8
+      target[i] = (target[i] and (not cmask)) or (rest[i].uint8 and cmask)
+      mask -= 8
+      i -= 1
+    return target.ipAddress
+
+  case i.address.kind:
+    of ip4:
+      let rest = pack(n.uint32)
+      mixAddr(i.address.ip4, 4)
+    of ip6:
+      let rest = pack(0.uint64) & pack(n.uint64)
+      mixAddr(i.address.ip6, 16)
+
+proc hash*(x: IpAddress): int =
+  result = 0
+  case x.kind:
+    of ip4:
+      return (array[4, uint8](x.ip4)).hash
+    of ip6:
+      return (array[16, uint8](x.ip6)).hash
