@@ -100,7 +100,7 @@ proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] {.async.
 proc pipeLimited*[T](self: Stream[T], provider: Provider[T], limit: int64): Future[void] {.async.} =
   var limit = limit
   while limit > 0:
-    let data = await self.receiveSome(max(limit, (baseBufferSizeFor(T) * 8).int64).int)
+    let data = await self.receiveSome(limit.int)
     limit -= data.len
     await provider.provideAll(data)
   provider.sendClose(JustClose)
