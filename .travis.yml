@@ -37,3 +37,7 @@ before_script:
 script:
   - nimble install -y
   - python3 bin/runtests.py
+cache:
+  directories:
+    - nim-devel
+    - nimble
