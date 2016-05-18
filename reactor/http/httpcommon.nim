@@ -131,7 +131,7 @@ proc tryParseHexUint64*(val: string): Result[int64] =
   return just(res)
 
 proc tryParseUint64*(val: string): Result[int64] =
-  var val = val
+  var val = val.strip
   if val.len > 19:
     return error(int64, "integer too large")
 
