@@ -25,7 +25,8 @@ proc makeHeaders(request: HttpRequest): Result[string] =
   if not request.path.hasOnlyChars(AllChars - {'\L', '\r', ' '}):
     return error(string, "invalid HTTP path")
 
-  var header = request.httpMethod & " " & request.path & " HTTP/1.1" & crlf
+  let path = if request.path == "": "/" else: request.path
+  var header = request.httpMethod & " " & path & " HTTP/1.1" & crlf
   for key, value in request.headers.pairs:
     if not key.hasOnlyChars(AllChars - {'\L', '\r', ' '}):
       return error(string, "invalid header key")
@@ -116,10 +117,15 @@ proc readChunked*(conn: HttpConnection): ByteStream =
         asyncRaise newException(HttpError, "invalid chunked encoding")
 
       let length = await tryParseHexUint64(info)
+      if length != 0:
+        await pipeLimited(conn.conn.input, provider, length, close=false)
+
+      let nl = await conn.conn.input.read(2)
+      if nl != crlf:
+        asyncRaise newException(HttpError, "invalid chunked encoding")
+
       if length == 0:
         break
-
-      await pipeLimited(conn.conn.input, provider, length)
 
     provider.sendClose(JustClose)
 
@@ -132,7 +138,7 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
   if not expectingBody:
     return response
 
-  let te = response.headers.getOrDefault("tranfer-encoding", "")
+  let te = response.headers.getOrDefault("transfer-encoding", "")
   if te == "chunked":
     response.dataStream = conn.readChunked()
   elif te == "":

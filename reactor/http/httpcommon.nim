@@ -113,7 +113,7 @@ proc reverse(s: var string) =
     swap(s[i], s[s.len - 1 - i])
 
 proc tryParseHexUint64*(val: string): Result[int64] =
-  var val = val
+  var val = val.strip
   if val.len > 15:
     return error(int64, "integer too large")
 
