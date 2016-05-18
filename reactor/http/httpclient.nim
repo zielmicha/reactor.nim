@@ -132,7 +132,7 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
   if not expectingBody:
     return response
 
-  let te = response.headers.getOrDefault("tranfer-encoding", "")
+  let te = response.headers.getOrDefault("transfer-encoding", "")
   if te == "chunked":
     response.dataStream = conn.readChunked()
   elif te == "":
