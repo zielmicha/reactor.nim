@@ -1,7 +1,7 @@
 ## A `Future` represents the result of an asynchronous computation. `Completer` is used to create and complete Futures - it can be thought as of an other side of a Future.
 
 type
-  Future*[T] = object
+  Future*[T] = object {.requiresinit.}
     case isImmediate: bool
     of true:
       value: T
@@ -232,15 +232,15 @@ proc thenChainImpl[T, R](f: Future[T], function: (proc(t:T): Future[R])): Future
 
   return completer.getFuture
 
-proc declval[R](r: typedesc[R]): R =
-  raise newException(Exception, "executing declval")
+proc valuetype[T](f: typedesc[Future[T]]): T =
+  return now(error(T, "")).value
 
 proc thenWrapper[T, R](f: Future[T], function: (proc(t:T):R)): auto =
   when R is Future:
     when R is Future[void]:
       return thenChainImpl[T, void](f, function)
     else:
-      return thenChainImpl[T, type(declval(R).value)](f, function)
+      return thenChainImpl[T, type(valuetype(R))](f, function)
   else:
     return thenNowImpl[T, R](f, function)
 
