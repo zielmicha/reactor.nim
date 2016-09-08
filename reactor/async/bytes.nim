@@ -61,7 +61,7 @@ proc writeChunksPrefixed*(self: Provider[byte]): Provider[string] =
 
 proc readUntil*(self: Stream[byte], chars: set[char], limit=high(int)): Future[string] {.async.} =
   var line = ""
-  template addAndTrimToLimit(s: expr) =
+  template addAndTrimToLimit(s: untyped) =
     assert line.len <= limit
     var value = s
     if value.len > limit - line.len:
@@ -100,4 +100,4 @@ proc readLine*(self: Stream[byte], limit=high(int)): Future[string] =
 
 proc lines*(self: Stream[byte], limit=high(int)): Stream[string] {.asynciterator.} =
   while true:
-    asyncYield (await self.readLine(limit=limit))
+    asyncYield(await self.readLine(limit=limit))

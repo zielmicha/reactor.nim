@@ -10,11 +10,11 @@ proc iterFuture[T](f: Future[T]): AsyncIterator =
     completer.callback = proc(data: RootRef, future: Completer[T]) =
       cont()
 
-template stopAsync*(): expr =
+template stopAsync*(): typed =
   # we will never be called again
   yield AsyncIterator(callback: nil)
 
-template awaitInIterator*(body: expr, errorFunc: untyped): expr =
+template awaitInIterator*(body: typed, errorFunc: untyped): untyped =
   let fut = body
   when fut is Future:
     assert fut.isImmediate or fut.completer != nil, "nil passed to await"
@@ -34,7 +34,7 @@ template awaitInIterator*(body: expr, errorFunc: untyped): expr =
     fut.get
     discard
 
-template tryAwait*(body: expr): expr =
+template tryAwait*(body: typed): untyped =
   ## Waits for future completion and returns the result.
   let fut = body
   assert fut.isImmediate or fut.completer != nil, "nil passed to await"
@@ -70,7 +70,7 @@ proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
     node[i] = transformAsyncBody(n[i])
   return node
 
-macro async*(a): stmt =
+macro async*(a): untyped =
   ## `async` macro. Enables you to write asynchronous code in a similar manner to synchronous code.
   ##
   ## For example:
@@ -103,18 +103,18 @@ macro async*(a): stmt =
   var asyncBody = quote do:
     let asyncProcCompleter = `completer`
 
-    template await(e: expr): expr =
+    template await(e: typed): untyped =
       awaitInIterator(e, asyncProcCompleter.completeError)
-    template asyncRaise(e: expr): expr =
+    template asyncRaise(e: typed) =
       asyncProcCompleter.completeError(attachInstInfo(e, extInstantiationInfo()))
       return
 
     when asyncProcCompleter is Completer[void]:
-      template asyncReturn(): expr =
+      template asyncReturn() =
         asyncProcCompleter.complete()
         return
     else:
-      template asyncReturn(e: expr): expr =
+      template asyncReturn(e: typed) =
         asyncProcCompleter.complete(e)
         return
 
@@ -139,7 +139,7 @@ macro async*(a): stmt =
   result[4] = pragmas
   result[6] = asyncBody
 
-macro asyncFor*(iterClause: expr, body: expr): stmt {.immediate.} =
+macro asyncFor*(iterClause: untyped, body: untyped): untyped =
   ## An asynchronous version of `for` that works on Streams. Example:
   ## ```
   ## proc simplePipe(src: Stream[int], dst: Provider[int]) {.async.} =
@@ -167,7 +167,7 @@ macro asyncFor*(iterClause: expr, body: expr): stmt {.immediate.} =
 
   newBody
 
-macro asyncIterator*(a): stmt =
+macro asyncIterator*(a): untyped =
   ## An iterator that produces elements asynchronously. Example:
   ## ```
   ## proc intGenerator(): Stream[int] {.asyncIterator.} =
@@ -194,14 +194,14 @@ macro asyncIterator*(a): stmt =
   var asyncBody = quote do:
     let (asyncStream, asyncProvider) = `streamProviderPair`
 
-    template await(e: expr): expr =
+    template await(e: untyped): untyped =
       awaitInIterator(e, asyncProvider.sendClose)
 
-    template asyncRaise(e: expr): expr =
+    template asyncRaise(e: untyped): untyped =
       asyncProvider.sendClose(attachInstInfo(e, extInstantiationInfo()))
       return
 
-    template asyncYield(e: expr): expr =
+    template asyncYield(e: untyped): untyped =
       mixin await
       await asyncProvider.provide(e)
 

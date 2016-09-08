@@ -78,7 +78,7 @@ proc sockaddrToIpaddr*(address: ptr SockAddr): tuple[address: IpAddress, port: i
 
 proc c_exit(errorcode: cint) {.importc: "exit", header: "<stdlib.h>".}
 
-template uvTopCallback*(c: stmt): stmt {.immediate.} =
+template uvTopCallback*(c: untyped): untyped =
   try:
     c
   except:

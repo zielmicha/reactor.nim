@@ -245,7 +245,7 @@ proc receiveChunk[T, Ret](self: Stream[T], minn: int, maxn: int, returnType: typ
 
   var offset = self.receiveSomeInto(res.asView)
 
-  template getResult: expr =
+  template getResult: untyped =
     if offset == res.len:
       res
     else:

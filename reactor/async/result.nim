@@ -23,7 +23,7 @@ proc getOriginal*(exc: ref Exception): ref Exception =
     return exc
 
 when debugFutures:
-  template extInstantiationInfo(depth: int= -1): expr =
+  template extInstantiationInfo(depth: int= -1): untyped =
     let frame = getFrame()
     let info = instantiationInfo(depth - 1)
     (info.filename, info.line, $frame.procname).InstantationInfo
@@ -127,7 +127,7 @@ proc onSuccessOrErrorR*(f: Result[void], onSuccess: (proc()), onError: (proc(t:r
   else:
     onError(f.error)
 
-template catchError*(e: expr): expr =
+template catchError*(e: untyped): untyped =
   ## Converts errors from `e` into error(...) and other results into just(e)
   try:
     just(e)
