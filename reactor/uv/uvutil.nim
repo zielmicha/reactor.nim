@@ -1,12 +1,15 @@
 import reactor/uv/uv, reactor/ipaddress, reactor/ipaddress
-import posix, os
-
-export Sockaddr_storage
+import os
 
 type UVError* = object of Exception
 
 when not compileOption("threads"):
   {.error: "Please compile with --threads:on (libuv requires pthreads even if you don't use threads)".}
+
+when defined(windows):
+  import winlean
+else:
+  import posix
 
 template checkZero*(name, e) =
   if e != 0:
@@ -28,7 +31,8 @@ var threadLoopId  {.threadvar.}: int
 var globalLoopId: int
 
 proc init() =
-  signal(SIGPIPE, SIG_IGN)
+  when not defined(windows):
+    signal(SIGPIPE, SIG_IGN)
 
 proc getThreadUvLoop*(): ptr uv_loop_t =
   # TODO: support multithreading
@@ -46,6 +50,16 @@ proc uvError*(code: cint|int, info: string): ref Exception =
 proc osError*(info: string): ref Exception =
   let code = osLastError()
   return newException(Exception, info & ": " & osErrorMsg(code))
+
+when defined(windows):
+  proc htons(a: uint16): uint16 =
+    # windows is always low endian
+    return (((a and 0xFF) shl 8) or ((a shr 8) and 0xFF)).uint16
+
+  type InPort = uint16
+
+  template s6addr*(a): untyped =
+    a.bytes
 
 when not compiles(htons(cast[InPort](0))):
   # Nim >0.13.0 compat
@@ -72,7 +86,8 @@ proc sockaddrToIpaddr*(address: ptr SockAddr): tuple[address: IpAddress, port: i
      return (a.sin_addr.s_addr.ipAddress.from4, a.sin_port.int)
   elif address.sa_family == AF_INET6:
     var a = cast[ptr Sockaddr_in6](address)
-    return (a.sin6_addr.s6_addr.ipAddress.from6, a.sin6_port.int)
+    let address = a.sin6_addr.s6_addr.ipAddress.from6
+    return (address, a.sin6_port.int)
   else:
     raise newException(ValueError, "unknown address family")
 

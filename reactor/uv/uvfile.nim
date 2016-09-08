@@ -1,5 +1,4 @@
 import reactor/util, reactor/async, reactor/uv/uv, reactor/uv/uvutil
-import posix
 
 proc makeReq(callback: proc(req: ptr uv_fs_t)): tuple[req: ptr uv_fs_t, cb: uv_fs_cb] =
   type State = ref object

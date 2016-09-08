@@ -1,19 +1,23 @@
 import reactor/uv/errno
 import reactor/uv/build
-import posix
-
-export SockAddr_in, SockAddr, AddrInfo
-
-# TODO: we use SockAddr from posix, on Windows different version may be needed
 
 when defined(windows):
   type uv_buf_t* = object
-    len*: culong
+    len*: int
     base*: pointer
+
+  import winlean
+  const SockAddr_maxsize* = 512
+  export SockAddr_in, SockAddr, AddrInfo
 else:
   type uv_buf_t* = object
     base*: pointer
     len*: int
+
+  import posix
+  const SockAddr_maxsize* = 512
+  export SockAddr_in, SockAddr, AddrInfo
+  export O_TRUNC, O_WRONLY, O_APPEND, O_RDONLY, O_RDWR
 
 type # TODO
   uv_os_sock_t = cint

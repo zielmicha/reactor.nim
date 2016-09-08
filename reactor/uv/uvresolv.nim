@@ -1,14 +1,18 @@
 import reactor/ipaddress
 import reactor/async
 import reactor/uv/uv, reactor/uv/uvutil
-import posix
+
+when defined(windows):
+  import winlean
+else:
+  import posix
 
 proc addressesFromInfo(res: ptr AddrInfo): seq[IpAddress] =
   var res = res
   result = @[]
   while res != nil:
     # getaddrinfo returns duplicate results for multiple socktypes
-    if res.ai_socktype == SOCK_DGRAM:
+    if (when defined(windows): true else: res.ai_socktype == SOCK_DGRAM):
       if res.ai_family == AF_INET:
         result.add cast[ptr Sockaddr_in](res.ai_addr).sin_addr.s_addr.ipAddress
       elif res.ai_family == AF_INET6:

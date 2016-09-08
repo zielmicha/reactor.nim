@@ -4,7 +4,11 @@ import reactor/async
 import reactor/resolv
 import reactor/ipaddress
 import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, reactor/uv/errno
-import posix
+
+when defined(windows):
+  import winlean
+else:
+  import posix
 
 type
   TcpServer* = ref object
@@ -19,7 +23,7 @@ proc newTcpConnection(client: ptr uv_handle_t): TcpConnection =
   return newUvStream[TcpConnection](cast[ptr uv_stream_t](client))
 
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
-  var name: Sockaddr_storage
+  var name: SockAddr
   var length = sizeof(name).cint
   checkZero "getpeername", uv_tcp_getpeername(conn.stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
@@ -67,7 +71,7 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
 
   proc resolved(addresses: seq[IpAddress]): Future[TcpServer] =
     for address in addresses:
-      var sockaddress: Sockaddr_storage
+      var sockaddress: SockAddr
       ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress), address, port)
       let bindErr = uv_tcp_bind(server, cast[ptr SockAddr](addr sockaddress), 0)
       if bindErr == UV_ENOPROTOOPT: # FIXME: windows
@@ -98,7 +102,7 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
   let state = State(completer: newCompleter[TcpConnection]())
   GC_ref(state)
   connectReq.data = cast[pointer](state)
-  state.sockaddress = cast[ptr SockAddr](alloc0(sizeof(Sockaddr_storage)))
+  state.sockaddress = cast[ptr SockAddr](alloc0(SockAddr_maxsize))
   ipaddrToSockaddr(state.sockaddress, host, port)
 
   state.errMsg = "connect to [" & $host & "]:" & $port

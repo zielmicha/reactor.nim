@@ -1,6 +1,5 @@
 import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/errno
 import reactor/async, reactor/util, reactor/datatypes/basic
-import posix
 
 type MsgPipe* = ref object of Pipe[string]
   inputProvider: Provider[string]
