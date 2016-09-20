@@ -19,6 +19,11 @@ else:
   export SockAddr_in, SockAddr, AddrInfo
   export O_TRUNC, O_WRONLY, O_APPEND, O_RDONLY, O_RDWR
 
+  # enums
+type
+  uv_handle_type_arg = cint
+  uv_req_type_arg = cint
+
 type # TODO
   uv_os_sock_t = cint
   uv_os_fd_t = cint
@@ -54,7 +59,7 @@ type
 type
   uv_fs_s* = object
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     fs_type*: uv_fs_type
@@ -67,7 +72,7 @@ type
 
   uv_connect_s* = object
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     cb*: uv_connect_cb
@@ -82,10 +87,10 @@ type
     UV_UNKNOWN_HANDLE = 0, UV_ASYNC, UV_CHECK, UV_FS_EVENT, UV_FS_POLL, 
     UV_HANDLE, UV_IDLE, UV_NAMED_PIPE, UV_POLL, UV_PREPARE, UV_PROCESS, 
     UV_STREAM, UV_TCP, UV_TIMER, UV_TTY, UV_UDP, UV_SIGNAL, UV_FILE, 
-    UV_HANDLE_TYPE_MAX
-  uv_req_type* = enum 
+    UV_HANDLE_TYPE_ARG_MAX
+  uv_req_type* = enum
     UV_UNKNOWN_REQ = 0, UV_REQ, UV_CONNECT, UV_WRITE, UV_SHUTDOWN, UV_UDP_SEND, 
-    UV_FS, UV_WORK, UV_GETADDRINFO, UV_GETNAMEINFO, UV_REQ_TYPE_MAX
+    UV_FS, UV_WORK, UV_GETADDRINFO, UV_GETNAMEINFO, UV_REQ_TYPE_ARG_MAX
   uv_loop_t* = pointer
   uv_handle_t* = object
     data*: pointer
@@ -106,7 +111,7 @@ type
   uv_signal_t* = pointer
   uv_req_t* = object
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
   uv_getaddrinfo_t* = uv_req_t
   uv_getnameinfo_t* = uv_req_t
   uv_shutdown_t* = uv_req_t
@@ -177,6 +182,12 @@ type
   uv_membership* = enum 
     UV_LEAVE_GROUP = 0, UV_JOIN_GROUP
 
+converter toCint*(a: uv_req_type): cint =
+  return a.cint
+
+converter toCint*(a: uv_handle_type): cint =
+  return a.cint
+
 proc uv_version*(): cuint {.importc.}
 proc uv_version_string*(): cstring {.importc.}
 type
@@ -212,7 +223,7 @@ proc uv_err_name*(err: cint): cstring {.importc.}
 type 
   uv_req_s* = object 
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
 
@@ -222,7 +233,7 @@ proc uv_shutdown*(req: ptr uv_shutdown_t; handle: ptr uv_stream_t;
 type 
   uv_shutdown_s* = object 
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     handle*: ptr uv_stream_t
@@ -235,14 +246,14 @@ type
   uv_handle_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_10507731583701144255
 
 
-proc uv_handle_size*(`type`: uv_handle_type): csize {.importc.}
-proc uv_req_size*(`type`: uv_req_type): csize {.importc.}
+proc uv_handle_size*(`type`: uv_handle_type_arg): csize {.importc.}
+proc uv_req_size*(`type`: uv_req_type_arg): csize {.importc.}
 proc uv_is_active*(handle: ptr uv_handle_t): cint {.importc.}
 proc uv_walk*(loop: ptr uv_loop_t; walk_cb: uv_walk_cb; arg: pointer) {.importc.}
 proc uv_print_all_handles*(loop: ptr uv_loop_t; stream: ptr FILE) {.importc.}
@@ -260,7 +271,7 @@ type
   uv_stream_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_6590849012234410065
@@ -283,7 +294,7 @@ proc uv_try_write*(handle: ptr uv_stream_t; bufs: ptr uv_buf_t; nbufs: cuint): c
 type 
   uv_write_s* = object 
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     cb*: uv_write_cb
@@ -303,7 +314,7 @@ type
   uv_tcp_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_3596046416482611825
@@ -342,7 +353,7 @@ type
   uv_udp_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_5221779730467212091
@@ -351,7 +362,7 @@ type
 
   uv_udp_send_s* = object 
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     handle*: ptr uv_udp_t
@@ -388,7 +399,7 @@ type
   uv_tty_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_5845044092622324401
@@ -405,7 +416,7 @@ proc uv_tty_init*(a2: ptr uv_loop_t; a3: ptr uv_tty_t; fd: uv_file;
 proc uv_tty_set_mode*(a2: ptr uv_tty_t; mode: uv_tty_mode_t): cint {.importc.}
 proc uv_tty_reset_mode*(): cint {.importc.}
 proc uv_tty_get_winsize*(a2: ptr uv_tty_t; width: ptr cint; height: ptr cint): cint {.importc.}
-proc uv_guess_handle*(file: uv_file): uv_handle_type {.importc.}
+proc uv_guess_handle*(file: uv_file): uv_handle_type_arg {.importc.}
 type 
   INNER_C_UNION_16028222375510153848* = object  {.union.}
     fd*: cint
@@ -414,7 +425,7 @@ type
   uv_pipe_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_16028222375510153848
@@ -435,7 +446,7 @@ proc uv_pipe_getpeername*(handle: ptr uv_pipe_t; buffer: cstring;
                           size: ptr csize): cint {.importc.}
 proc uv_pipe_pending_instances*(handle: ptr uv_pipe_t; count: cint) {.importc.}
 proc uv_pipe_pending_count*(handle: ptr uv_pipe_t): cint {.importc.}
-proc uv_pipe_pending_type*(handle: ptr uv_pipe_t): uv_handle_type {.importc.}
+proc uv_pipe_pending_type*(handle: ptr uv_pipe_t): uv_handle_type_arg {.importc.}
 type 
   INNER_C_UNION_10983300994003237821* = object  {.union.}
     fd*: cint
@@ -444,7 +455,7 @@ type
   uv_poll_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_10983300994003237821
@@ -467,7 +478,7 @@ type
   uv_prepare_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_13797140684363503580
@@ -484,7 +495,7 @@ type
   uv_check_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_16814348499152137992
@@ -501,7 +512,7 @@ type
   uv_idle_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_12680267433943841815
@@ -518,7 +529,7 @@ type
   uv_async_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_9047668530012837112
@@ -535,7 +546,7 @@ type
   uv_timer_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_9416403630688343926
@@ -551,7 +562,7 @@ proc uv_timer_get_repeat*(handle: ptr uv_timer_t): uint64 {.importc.}
 type 
   uv_getaddrinfo_s* = object
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     loop*: ptr uv_loop_t
@@ -564,7 +575,7 @@ proc uv_freeaddrinfo*(ai: ptr AddrInfo) {.importc.}
 type 
   uv_getnameinfo_s* = object 
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     loop*: ptr uv_loop_t
@@ -615,7 +626,7 @@ type
   uv_process_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_11845354711802889067
@@ -630,7 +641,7 @@ proc uv_kill*(pid: cint; signum: cint): cint {.importc.}
 type 
   uv_work_s* = object 
     data*: pointer
-    `type`*: uv_req_type
+    `type`*: uv_req_type_arg
     active_queue*: array[2, pointer]
     reserved*: array[4, pointer]
     loop*: ptr uv_loop_t
@@ -791,7 +802,7 @@ type
   uv_fs_event_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_1939456371041102125
@@ -804,7 +815,7 @@ type
   uv_fs_poll_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_5427338491189710218
@@ -825,7 +836,7 @@ type
   uv_signal_s* = object 
     data*: pointer
     loop*: ptr uv_loop_t
-    `type`*: uv_handle_type
+    `type`*: uv_handle_type_arg
     close_cb*: uv_close_cb
     handle_queue*: array[2, pointer]
     u*: INNER_C_UNION_11359569105578982015
