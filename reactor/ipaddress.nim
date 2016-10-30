@@ -105,12 +105,42 @@ proc addressBitLength*(a: Ip6Address): int = addressBitLength(ip6)
 proc parseAddress4*(a: string): Ip4Address =
   let parts = a.split(".").map(a => parseInt(a).uint8)
   if parts.len != 4:
-    raise newException(ValueError, "invalid IP4 address ($1)" % [$a])
+    raise newException(ValueError, "invalid IPv4 address ($1)" % [$a])
   [parts[0], parts[1], parts[2], parts[3]].Ip4Address
 
+proc parseAddress6*(s: string): Ip6Address =
+  var parts = s.split(":")
+  if len(parts) < 8:
+    let emptyPart = parts.find("")
+    if emptyPart == -1:
+      raise newException(ValueError, "invalid IPv6 address ($1)" % [$s])
+    var newParts = parts[0..<emptyPart]
+    for i in 0..(8 - len(parts)):
+      newParts.add "0"
+    newParts &= parts[emptyPart+1..^1]
+    parts = newParts
+
+  if len(parts) != 8:
+    raise newException(ValueError, "invalid IPv6 address ($1)" % [$s])
+
+  var address: array[16, uint8]
+  for i, part in parts:
+    let num = parseHexInt(part)
+    if num > 0xffff or num < 0:
+      raise newException(ValueError, "invalid IPv6 address ($1)" % [$s])
+    address[i*2] = uint8(num div 256)
+    address[i*2+1] = uint8(num mod 256)
+
+  address.Ip6Address
+
 proc parseAddress*(a: string): IpAddress =
-  result.kind = ip4
-  result.ip4 = parseAddress4(a)
+  assert a != nil
+  if ":" in a:
+    result.kind = ip6
+    result.ip6 = parseAddress6(a)
+  else:
+    result.kind = ip4
+    result.ip4 = parseAddress4(a)
 
 proc getBit*(a: Ip4Address | Ip6Address | IpAddress, i: int): bool =
   return ((a[i div 8] shr uint8(i mod 8)) and 1) == 1
@@ -215,3 +245,10 @@ proc hash*(x: IpAddress): int =
       return (array[4, uint8](x.ip4)).hash
     of ip6:
       return (array[16, uint8](x.ip6)).hash
+
+when isMainModule:
+  echo parseAddress("127.0.0.1")
+  echo parseAddress("::1")
+  echo parseAddress("::")
+  echo parseAddress("123:4555::54:65")
+  echo parseAddress("0123:4567:89ab:cdef:0123:4567:89ab:cdef")
