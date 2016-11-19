@@ -161,7 +161,7 @@ macro asyncFor*(iterClause: untyped, body: untyped): untyped =
         if res.error.getOriginal of CloseException:
           break
         else:
-          asyncRaise res.error
+          asyncRaise(res.error)
       let `itemName` = res.get
       `body`
 
@@ -213,9 +213,11 @@ macro asyncIterator*(a): untyped =
     return asyncStream
 
   result = newProc(procName)
+  result[2] = a[2].copyNimTree # generic params
   result[3] = newNimNode(nnkFormalParams)
   result[3].add returnTypeFull
   for param in params:
     result[3].add param
   result[4] = pragmas
   result[6] = asyncBody
+

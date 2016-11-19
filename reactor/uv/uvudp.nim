@@ -1,5 +1,5 @@
 import reactor/async, reactor/ipaddress, reactor/resolv
-import reactor/uv/uv, reactor/uv/uvutil
+import reactor/uv/uv, reactor/uv/uvutil, posix
 
 type
   UdpPacket* = ref object

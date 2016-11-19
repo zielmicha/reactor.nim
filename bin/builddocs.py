@@ -32,7 +32,7 @@ for path in nim_files:
             elif not line.startswith('import '):
                 output.write(line)
 
-    subprocess.check_call(['nim', 'doc', new_file])
+    subprocess.check_call(['nim', 'doc', '--docSeeSrcUrl:https://github.com/zielmicha/reactor.nim/tree/master', new_file])
 
 for root, dirs, files in os.walk("doc/"):
     for name in files:

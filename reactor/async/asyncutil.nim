@@ -133,3 +133,20 @@ proc zip*[A](a: seq[Future[A]]): Future[seq[A]] {.async.} =
 proc zip*(a: seq[Future[void]]): Future[void] {.async.} =
   for item in a:
     await item
+
+proc splitFuture*[A, B](f: Future[tuple[a: A, b: B]]): tuple[a: Future[A], b: Future[B]] =
+  ## Converts a future of tuple to tuple of futures.
+  let ca = newCompleter[A]()
+  let cb = newCompleter[B]()
+  f.onSuccessOrError((proc(v: (A, B)) =
+                         ca.complete(v.a)
+                         ca.complete(v.b)),
+                     (proc(exception: ref Exception) =
+                         ca.completeError(exception)
+                         cb.completeError(exception)))
+
+  return (ca.getFuture, cb.getFuture)
+
+proc unwrapPipeFuture*[T](f: Future[Pipe[T]]): Pipe[T] =
+  let fs = f.map(p => (p.stream, p.provider)).splitFuture
+  return (unwrapStreamFuture(fs[0]), unwrapProviderFuture(fs[1]))

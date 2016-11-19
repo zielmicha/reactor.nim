@@ -23,6 +23,7 @@ proc newTcpConnection(client: ptr uv_handle_t): TcpConnection =
   return newUvStream[TcpConnection](cast[ptr uv_stream_t](client))
 
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
+  ## Get address of a remote peer (similar to POSIX getpeername).
   var name: SockAddr
   var length = sizeof(name).cint
   checkZero "getpeername", uv_tcp_getpeername(conn.stream, cast[ptr SockAddr](addr name), addr length)
@@ -42,7 +43,7 @@ proc onNewConnection(server: ptr uv_stream_t; status: cint) {.cdecl.} =
 
   let provided = serverObj.incomingConnectionsProvider.provideSome(singleItemView(conn))
   if provided == 0:
-    echo "Warning: dropped incoming TCP connection"
+    stderr.writeLine "Warning: dropped incoming TCP connection"
     # FIXME: don't accept connection if there is no space in the queue
     conn.BytePipe.close(new(CloseException))
 
@@ -66,6 +67,15 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
   return serverObj
 
 proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
+  ## Create TcpServer listening on `host`:`port`.
+  ##
+  ## Example:
+  ##
+  ## .. code-block:: nim
+  ##   let server = await createTcpServer(5000)
+  ##   asyncFor conn in server.incomingConnections:
+  ##     # handle incoming connection
+  ##     await conn.output.write("hello")
   let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), server)
 
@@ -92,6 +102,7 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
   return resolveAddress(host).then(resolved)
 
 proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
+  ## Connect to TCP server running on host:port.
   let connectReq = cast[ptr uv_connect_t](newUvReq(UV_CONNECT))
 
   type State = ref object
@@ -127,6 +138,7 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
     return state.completer.getFuture
 
 proc connectTcp*(host: string, port: int): Future[TcpConnection] {.async.} =
+  ## Connect to TCP server running on host:port.
   # TODO: add bindHost
 
   let addresses = await resolveAddress(host)
@@ -136,5 +148,6 @@ proc connectTcp*(host: string, port: int): Future[TcpConnection] {.async.} =
     return (await connectTcp(addresses[0], port))
 
 proc close*(t: TcpConnection, err: ref Exception) =
+  ## Close TCP connection.
   # why close doesn't work without this?
   BytePipe(t).close(err)

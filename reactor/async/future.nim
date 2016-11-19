@@ -277,6 +277,10 @@ proc waitForever*(): Future[void] =
   let completer = newCompleter[void]()
   return completer.getFuture
 
+proc waitForever*[T](t: typedesc[T]): Future[T] =
+  let completer = newCompleter[T]()
+  return completer.getFuture
+
 proc runLoop*[T](f: Future[T]): T =
   ## Run the event loop until Future `f` completes, return the value. If the Future completes with an error, raise it as an exception. Consider using `runMain` instead of this.
   var loopRunning = true

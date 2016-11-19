@@ -371,7 +371,7 @@ proc map*[T, R](self: Provider[T], function: (proc(x: R): T)): Provider[R] =
   pipe(rstream, self, function)
   return rprovider
 
-proc unwrapStreamFuture[T](f: Future[Stream[T]]): Stream[T] =
+proc unwrapStreamFuture*[T](f: Future[Stream[T]]): Stream[T] =
   # TODO: implement this without extra copy
   let (stream, provider) = newStreamProviderPair()
 
@@ -379,6 +379,14 @@ proc unwrapStreamFuture[T](f: Future[Stream[T]]): Stream[T] =
                      proc(exception: ref Exception) = provider.sendClose(exception))
 
   return stream
+
+proc unwrapProviderFuture*[T](f: Future[Provider[T]]): Provider[T] =
+  let (stream, provider) = newStreamProviderPair()
+
+  f.onSuccessOrError(proc(newProvider: Provider[T]) = pipe(stream, newProvider),
+                     proc(exception: ref Exception) = stream.sendClose(exception))
+
+  return provider
 
 proc logClose*(err: ref Exception) =
   if not (err.getOriginal of CloseException):

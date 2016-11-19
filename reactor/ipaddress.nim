@@ -2,7 +2,7 @@ import strutils, sequtils, future, hashes
 import collections/bytes
 
 type
-  Interface*[T] = tuple[address: T, mask: int]
+  Interface[T] = tuple[address: T, mask: int]
 
   Ip6Address* = distinct array[16, uint8]
   Ip6Interface* = Interface[Ip6Interface]
@@ -14,6 +14,7 @@ type
     ip4, ip6
 
   IpAddress* = object
+    ## Represents IPv4 or IPv6 address.
     case kind*: IpKind
     of ip4:
       ip4*: Ip4Address
@@ -21,13 +22,16 @@ type
       ip6*: Ip6Address
 
   IpInterface* = Interface[IpAddress]
+    ## Represents IP address with a mask.
 
 proc toBinaryString*(s: Ip4Address | Ip6Address): string =
+  ## Converts IP address to its binary representation.
   const size = s.high - s.low + 1
   result = newString(size)
   copyMem(result.cstring, unsafeAddr(s), size)
 
 proc toBinaryString*(s: IpAddress): string =
+  ## Converts IP address to its binary representation.
   case s.kind:
     of ip4:
       return s.ip4.toBinaryString
@@ -35,24 +39,30 @@ proc toBinaryString*(s: IpAddress): string =
       return s.ip6.toBinaryString
 
 proc ipAddress*(a: int32): Ip4Address =
+  ## Creates IPv4 address from 32-bit integer.
   copyMem(addr result, a.unsafeAddr, 4)
 
 proc ipAddress*(a: uint32): Ip4Address =
+  ## Creates IPv4 address from 32-bit integer.
   copyMem(addr result, a.unsafeAddr, 4)
 
 proc ipAddress*(a: array[16, char]): Ip6Address =
+  ## Creates IPv6 address from its binary representation.
   var a = a
   copyMem(addr result, addr a, 16)
 
 proc ipAddress*(a: array[16, byte]): Ip6Address =
+  ## Creates IPv6 address from its binary representation.
   var a = a
   copyMem(addr result, addr a, 16)
 
 proc ipAddress*(a: array[4, char]): Ip4Address =
+  ## Creates IPv4 address from its binary representation.
   var a = a
   copyMem(addr result, addr a, 4)
 
 proc ipAddress*(a: array[4, byte]): Ip4Address =
+  ## Creates IPv4 address from its binary representation.
   var a = a
   copyMem(addr result, addr a, 4)
 
@@ -66,10 +76,11 @@ converter from6*(a: Ip6Address): IpAddress =
 
 proc `[]`*(a: Ip4Address, index: int): uint8 = array[4, uint8](a)[index]
 proc `[]`*(a: Ip6Address, index: int): uint8 = array[16, uint8](a)[index]
-proc `[]`*(a: IpAddress, index: int): uint8 =
+proc `[]`*(a: IpAddress, k: int): uint8 =
+  ## Returns `k`-th byte of the IP address.
   case a.kind:
-  of ip4: return a.ip4[index]
-  of ip6: return a.ip6[index]
+  of ip4: return a.ip4[k]
+  of ip6: return a.ip6[k]
 
 proc `$`*(a: Ip4Address): string =
   "$1.$2.$3.$4" % [$a[0], $a[1], $a[2], $a[3]]
