@@ -79,6 +79,11 @@ macro async*(a): untyped =
   ##   asyncReturn((await s) + 5)
   ## ```
 
+  var a = a
+  if a.kind == nnkStmtList:
+    if a.len != 1: error("expected exactly one function")
+    a = a[0]
+
   let procName = a[0]
   let allParams = toSeq(a[3].items)
   let params = if allParams.len > 0: allParams[1..<allParams.len] else: @[]

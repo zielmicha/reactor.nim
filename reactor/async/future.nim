@@ -1,14 +1,17 @@
+# included from reactor/async.nim
 ## A `Future` represents the result of an asynchronous computation. `Completer` is used to create and complete Futures - it can be thought as of an other side of a Future.
 
 type
   Future*[T] = object {.requiresinit.}
+    # Future can either be completed immediately or 'later'.
+    # The first case is only an optimization.
     case isImmediate: bool
     of true:
       value: T
     of false:
       completer: Completer[T]
 
-  CompleterNil[T] = ref object of RootObj
+  Completer*[T] = ref object of RootObj
     when debugFutures:
       stackTrace: string
 
@@ -20,8 +23,6 @@ type
     of false:
       data: RootRef
       callback: (proc(data: RootRef, future: Completer[T]) {.closure.})
-
-  Completer*[T] = CompleterNil[T]
 
   Bottom* = object
 
@@ -47,6 +48,14 @@ proc `$`*[T](c: Completer[T]): string =
 proc getFuture*[T](c: Completer[T]): Future[T] =
   ## Retrieves a Future managed by the Completer.
   Future[T](isImmediate: false, completer: c)
+
+proc internalGetCompleter*[T](c: Future[T]): Completer[T] =
+  ## Retrieves a Completer behind this Future. Returns `nil` is the future is immediate.
+  ## Only for low-level use.
+  if c.isImmediate:
+    return nil
+  else:
+    return c.completer
 
 proc destroyCompleter[T](f: Completer[T]) =
   if not f.consumed:
@@ -163,6 +172,16 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
 proc onSuccessOrError*(f: Future[void], onSuccess: (proc()), onError: (proc(t:ref Exception))) =
   onSuccessOrError[void](f, onSuccess, onError)
 
+proc onSuccessOrError*[T](f: Future[T], function: (proc(t: Result[T]))) =
+  onSuccessOrError(f,
+    (proc(t: T) = function(just(t))),
+    proc(exc: ref Exception) = function(error(T, exc)))
+
+proc onSuccessOrError*(f: Future[void], function: (proc(t: Result[void]))) =
+  onSuccessOrError(f,
+    proc() = function(just()),
+    proc(exc: ref Exception) = function(error(void, exc)))
+
 proc onError*(f: Future[Bottom], onError: (proc(t: ref Exception))) =
   onSuccessOrError(f, nil, onError)
 
@@ -173,6 +192,9 @@ proc ignoreResult*[T](f: Future[T]): Future[Bottom] =
                       onError=proc(t: ref Exception) = completeError(completer, t))
 
   return completer.getFuture
+
+proc ignoreResultValue*[T](f: Future[T]): Future[void] =
+  return f.then(proc(x: T) = discard)
 
 proc ignoreError*[Exc](f: Future[void], kind: typedesc[Exc]): Future[void] =
   ## Ignore an error in Future `f` of kind `kind` and transform it into successful completion.
@@ -262,9 +284,9 @@ proc ignoreFailCb(t: ref Exception) =
 
 proc ignore*(f: Future[void]) =
   ## Discard the future result.
-  onSuccessOrError[void](f,
-                         proc(t: void) = discard,
-                         ignoreFailCb)
+  onSuccessOrError(f,
+                   proc(t: void) = discard,
+                   ignoreFailCb)
 
 proc ignore*[T](f: Future[T]) =
   ## Discard the future result.

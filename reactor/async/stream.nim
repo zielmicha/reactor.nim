@@ -35,6 +35,9 @@ proc newPipe*[T](input: Stream[T], output: Provider[T]): Pipe[T] =
   result.output = output
 
 proc newStreamProviderPair*[T](bufferSize=0): tuple[stream: Stream[T], provider: Provider[T]] =
+  ## Create a new stream/provider pair. Proving values to `provider` will make them available on `stream`.
+  ## If more than `bufferSize` items are provided without being consumed by stream, `provide` operation blocks.
+  ## If ``bufferSize == 0`` is the implementation specific default is chosen.
   new(result.stream)
   result.stream.queue = newQueue[T]()
 
@@ -124,7 +127,7 @@ proc provideAll*[T](self: Provider[T], data: seq[T]|string): Future[void] =
   return completer.getFuture
 
 proc provide*[T](self: Provider[T], item: T): Future[void] =
-  ## Provides a signle. Returns Future that finishes when the item
+  ## Provides a single item. Returns Future that finishes when the item
   ## is pushed into queue.
 
   self.checkProvide()
@@ -153,14 +156,14 @@ proc provide*[T](self: Provider[T], item: T): Future[void] =
   return completer.getFuture
 
 proc sendClose*(self: Provider, exc: ref Exception) =
-  ## Closes the provider -- signals that no more messages will be provided.
+  ## Closes the provider -- signals that no more items will be provided.
   if sself.sendClosed: return
   sself.sendClosed = true
   sself.sendCloseException = exc
   sself.onRecvReady.callListener()
 
 proc recvClose*[T](self: Stream[T], exc: ref Exception) =
-  ## Closes the stream -- signals that no more messages will be received.
+  ## Closes the stream -- signals that no more items will be received.
   if self.recvClosed: return
   self.recvClosed = true
   self.recvCloseException = exc
