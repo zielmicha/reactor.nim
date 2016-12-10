@@ -1,3 +1,4 @@
+# included from reactor/async.nim
 import macros, sequtils
 
 type

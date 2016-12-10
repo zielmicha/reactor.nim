@@ -2,6 +2,12 @@
 ## A `Future` represents the result of an asynchronous computation. `Completer` is used to create and complete Futures - it can be thought as of an other side of a Future.
 
 type
+  FutureCallback[T] = (proc(data: RootRef, future: Completer[T]) {.closure.})
+
+  CallbackList[T] = ref object
+    next: CallbackList[T]
+    callback: FutureCallback[T]
+
   Future*[T] = object {.requiresinit.}
     # Future can either be completed immediately or 'later'.
     # The first case is only an optimization.
@@ -21,8 +27,8 @@ type
     of true:
       result: Result[T]
     of false:
-      data: RootRef
-      callback: (proc(data: RootRef, future: Completer[T]) {.closure.})
+      callback: FutureCallback[T]
+      callbackList: CallbackList[T]
 
   Bottom* = object
 
@@ -69,6 +75,13 @@ proc newCompleter*[T](): Completer[T] =
   result.isFinished = false
   when debugFutures:
     result.stackTrace = getStackTrace()
+
+proc addCallback[T](c: Completer[T], cb: FutureCallback[T]) =
+  if c.callback != nil:
+    c.callback = cb
+  else:
+    let newList = CallbackList[T](callback: cb, next: c.callbackList)
+    c.callbackList = newList
 
 proc now*[T](res: Result[T]): Future[T] =
   ## Returns already completed Future containing result `res`.
@@ -129,15 +142,22 @@ proc get*[T](self: Future[T]): T =
 
 proc completeResult*[T](self: Completer[T], x: Result[T]) =
   ## Complete a Future managed by the Completer with result `x`.
-  assert (not self.isFinished)
-  let data = self.data
+  assert(not self.isFinished)
   let callback = self.callback
-  self.data = nil
+  var callbackList = self.callbackList
+
   self.callback = nil
+  self.callbackList = nil
+
   self.isFinished = true
   self.result = x
+
   if callback != nil:
-    callback(data, self)
+    callback(nil, self)
+
+  while callbackList != nil:
+    callbackList.callback(nil, self)
+    callbackList = callbackList.next
 
 proc complete*[T](self: Completer[T], x: T) =
   ## Complete a Future managed by the Completer with value `x`.
@@ -165,9 +185,9 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
   if c.isFinished:
     onSuccessOrErrorR[T](c.result, onSuccess, onError)
   else:
-    c.callback =
-      proc(data: RootRef, compl: Completer[T]) =
-        onSuccessOrError[T](f, onSuccess, onError)
+    c.addCallback(
+      (proc(data: RootRef, compl: Completer[T]) =
+         onSuccessOrError[T](f, onSuccess, onError)))
 
 proc onSuccessOrError*(f: Future[void], onSuccess: (proc()), onError: (proc(t:ref Exception))) =
   onSuccessOrError[void](f, onSuccess, onError)
@@ -239,6 +259,10 @@ proc completeFrom*[T](c: Completer[T], f: Future[T]) =
                         else: complete[T](c, t),
                       onError=proc(t: ref Exception) = completeError[T](c, t))
 
+proc complete*[T](c: Completer[T], f: Future[T]) =
+  ## alias for completeFrom
+  c.completeFrom(f)
+
 proc thenChainImpl[T, R](f: Future[T], function: (proc(t:T): Future[R])): Future[R] =
   let completer = newCompleter[R]()
 
@@ -308,7 +332,7 @@ proc runLoop*[T](f: Future[T]): T =
   var loopRunning = true
 
   if not f.isCompleted:
-    f.completer.callback = proc(data: RootRef, future: Completer[T]) = stopLoop()
+    f.completer.addCallback(proc(data: RootRef, future: Completer[T]) = stopLoop())
 
   while not f.isCompleted:
     if not loopRunning:

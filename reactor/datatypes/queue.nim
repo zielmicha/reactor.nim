@@ -70,6 +70,7 @@ proc popFront*[T](queue: Queue[T], count=1) =
     if maxPop == doPop:
       queue.list.remove(queue.list.head)
     else:
+      seqView(head.value.data).slice(head.value.begin, doPop).clearIfReferenceType()
       head.value.begin += doPop
 
 proc `$`*[T](queue: Queue[T]): string =

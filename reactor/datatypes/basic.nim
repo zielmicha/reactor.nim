@@ -1,4 +1,4 @@
-import strutils
+import strutils, collections
 
 type
   View*[T] = object
@@ -74,9 +74,11 @@ proc slice*[T](v: SomeView[T], start: int): SomeView[T] =
   assert start < v.len and start >= 0
   return v.slice(start, v.len - start)
 
+type ScalarType = uint8 | uint16 | uint32 | uint64 | int8 | int16 | int32 | int64 | float32 | float64 | byte | char | enum
+
 proc copyFrom*[T](dst: View[T], src: SomeView[T]) =
   assert dst.size >= src.size
-  when T is int or T is byte:
+  when T is ScalarType:
     copyMem(dst.data, src.data, src.size * sizeof(T))
   else:
     for i in 0..<src.size:
@@ -105,3 +107,9 @@ iterator items*[T](src: SomeView[T]): T =
 
 proc `$`*[T](v: SomeView[T]): string =
   return "View[$1, $2]" % [$v.len, $v.copyAsSeq]
+
+proc clearIfReferenceType*[T](view: SomeView[T]) =
+  ## Clears `view` if it contains GC type
+  when not (T is ScalarType):
+    for i in 0..<view.size:
+      ptrAdd[T](view.data, i)[] = defaultVal(T)

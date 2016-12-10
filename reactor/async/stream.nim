@@ -1,3 +1,4 @@
+# included from reactor/async.nim
 
 type
   Stream*[T] = ref object
@@ -39,9 +40,9 @@ proc newStreamProviderPair*[T](bufferSize=0): tuple[stream: Stream[T], provider:
   ## If more than `bufferSize` items are provided without being consumed by stream, `provide` operation blocks.
   ## If ``bufferSize == 0`` is the implementation specific default is chosen.
   new(result.stream)
-  result.stream.queue = newQueue[T]()
+  result.stream.queue = newQueue[T](baseBufferSizeFor(T) * 8)
 
-  result.stream.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 64) else: bufferSize
+  result.stream.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 32) else: bufferSize
   result.provider = Provider[T](result.stream)
 
   newEvent(result.stream.onRecvReady)
