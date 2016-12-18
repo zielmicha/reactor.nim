@@ -99,6 +99,8 @@ proc tlsWriter(self: TlsPipe): ByteProvider =
   return provider
 
 proc wrapTls*(pipe: BytePipe): TlsPipe =
+  ## Wrap raw pipe with a secure TLS connection.
+  ## After this you still need to call handshakeAsClient or handshakeAsServer.
   init() # FIXME: thread safety?
   let bio = wrapBio(pipe)
   let self = TlsPipe(pipe: pipe, bio: bio, ssl: SSL_new(sslContext))
@@ -129,6 +131,9 @@ proc waitForHandshake(self: TlsPipe) {.async.} =
       break
 
 proc handshakeAsClient*(self: TlsPipe, hostname: string=nil, verify=true) {.async.} =
+  ## Initialize TLS connection as client. If `hostname` is set, request server to send certificate for it (using SNI).
+  ##
+  ## INSECURE: doesn't verify certificate name yet.
   if hostname != nil:
     doAssert(SSL_set_tlsext_host_name(self.ssl, hostname) == 0)
 
@@ -149,12 +154,14 @@ proc handshakeAsClient*(self: TlsPipe, hostname: string=nil, verify=true) {.asyn
   self.start()
 
 proc connectTls*(hostname: string, port: int): Future[TlsPipe] {.async.} =
+  ## Connect to TCP socket using TLS protocol.
   let conn = await connectTcp(hostname, port)
   let wrapped = wrapTls(conn)
   await wrapped.handshakeAsClient(hostname=hostname)
   return wrapped
 
 proc handshakeAsServer*(self: TlsPipe, certificateFile: string, keyFile: string) {.async.} =
+  ## Initialize TLS connection as server.
   doAssert(SSL_set_cipher_list(self.ssl, goodServerCiphers) == 1)
   SSL_set_accept_state(self.ssl)
   # TODO: use SSL_use_certificate_chain_file
