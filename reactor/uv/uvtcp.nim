@@ -15,6 +15,7 @@ type
   TcpServer* = ref object
     incomingConnections*: Stream[TcpConnection]
     incomingConnectionsProvider: Provider[TcpConnection]
+    stream: ptr uv_tcp_t
 
   TcpConnection* = ref object of uvstream.UvStream
 
@@ -43,7 +44,7 @@ proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
   checkZero "getpeername", uv_tcp_getpeername(conn.stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
-proc getSockAddr*(conn: TcpBoundSocket | TcpConnection): tuple[address: IpAddress, port: int] =
+proc getSockAddr*(conn: TcpBoundSocket | TcpConnection | TcpServer): tuple[address: IpAddress, port: int] =
   ## Get address of a TCP socket (similar to POSIX getsockaddr).
   var name: SockAddr
   var length = sizeof(name).cint
@@ -78,9 +79,11 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
   (serverObj.incomingConnections, serverObj.incomingConnectionsProvider) = newStreamProviderPair[TcpConnection]()
 
   proc closeTcpServer(err: ref Exception) =
+    serverObj.stream = nil
     uv_close(cast[ptr uv_handle_t](server), tcpServerClosed)
 
-  # TODO: serverObj.incomingConnectionsProvider.onRecvClose.addListener closeTcpServer
+  # FIXME: leak
+  # serverObj.incomingConnectionsProvider.onRecvClose.addListener closeTcpServer
 
   GC_ref(serverObj)
   server.data = cast[pointer](serverObj)

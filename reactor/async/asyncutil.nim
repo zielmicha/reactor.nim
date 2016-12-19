@@ -1,3 +1,4 @@
+# included from reactor/async.nim
 
 proc hash*(x: uint64): Hash =
   hash(cast[int64](x))
@@ -150,3 +151,7 @@ proc splitFuture*[A, B](f: Future[tuple[a: A, b: B]]): tuple[a: Future[A], b: Fu
 proc unwrapPipeFuture*[T](f: Future[Pipe[T]]): Pipe[T] =
   let fs = f.map(p => (p.stream, p.provider)).splitFuture
   return (unwrapStreamFuture(fs[0]), unwrapProviderFuture(fs[1]))
+
+proc pipe*[T](a: Pipe[T], b: Pipe[T]) =
+  pipe(a.input, b.output)
+  pipe(b.input, a.output)

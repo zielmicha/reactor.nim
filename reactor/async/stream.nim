@@ -23,6 +23,12 @@ type
 
   LengthStream*[T] = tuple[length: int64, stream: Stream[T]]
 
+# experimental aliases
+type
+  Input*[T] = Stream[T]
+
+  Output*[T] = Provider[T]
+
 let
   JustClose* = (ref CloseException)(msg: "just close")
 
@@ -155,6 +161,8 @@ proc provide*[T](self: Provider[T], item: T): Future[void] =
       self.onSendReady.removeListener sendListenerId)
 
   return completer.getFuture
+
+proc send*[T](self: Output[T], item: T): Future[void] = return self.send(item) # experimental alias
 
 proc sendClose*(self: Provider, exc: ref Exception) =
   ## Closes the provider -- signals that no more items will be provided.
@@ -350,6 +358,7 @@ proc flatMapperFunc[T, R](f: (proc(x: T): seq[R])): auto =
         target.add item
 
 proc pipe*[T, R](self: Stream[T], target: Provider[R], function: (proc(x: T): R)) =
+  # TODO: pipe should return Future[void]
   pipeChunks(self, target, mapperFunc(function))
 
 proc pipe*[T](self: Stream[T], target: Provider[T]) =
