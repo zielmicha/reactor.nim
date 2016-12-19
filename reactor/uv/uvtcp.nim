@@ -45,10 +45,10 @@ proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
 proc getSockAddr*(conn: TcpBoundSocket | TcpConnection | TcpServer): tuple[address: IpAddress, port: int] =
-  ## Get address of a TCP socket (similar to POSIX getsockaddr).
+  ## Get address of a TCP socket (similar to POSIX getsockname).
   var name: SockAddr
   var length = sizeof(name).cint
-  checkZero "getpeername", uv_tcp_getpeername(conn.stream, cast[ptr SockAddr](addr name), addr length)
+  checkZero "getsockname", uv_tcp_getsockname(conn.stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
 proc onNewConnection(server: ptr uv_stream_t; status: cint) {.cdecl.} =
