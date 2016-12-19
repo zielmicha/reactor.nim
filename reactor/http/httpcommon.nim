@@ -7,7 +7,7 @@ type
   HttpResponse* = ref object
     statusCode*: int
     headers*: HeaderTable
-    dataStream*: ByteStream
+    dataStream*: ByteInput
 
   HttpRequest* = ref object
     host*: string
@@ -16,7 +16,7 @@ type
     httpMethod*: string
     path*: string
     headers*: HeaderTable
-    data*: Option[LengthByteStream]
+    data*: Option[LengthByteInput]
 
 proc tryParseUint64*(val: string): Result[int64]
 
@@ -54,7 +54,7 @@ proc len*(self: HeaderTable): int =
 
 #
 
-proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteStream]=none(LengthByteStream), port: int=0, isSsl=false): HttpRequest =
+proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput), port: int=0, isSsl=false): HttpRequest =
   HttpRequest(data: data,
               headers: headers,
               path: path,
@@ -63,7 +63,7 @@ proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: He
               httpMethod: httpMethod,
               host: host)
 
-proc newHttpRequest*(httpMethod: string, url: Uri, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteStream]): Result[HttpRequest] =
+proc newHttpRequest*(httpMethod: string, url: Uri, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]): Result[HttpRequest] =
   var isSsl = false
   if url.scheme == "https":
     isSsl = true
@@ -92,7 +92,7 @@ proc newHttpRequest*(httpMethod: string, url: Uri, headers: HeaderTable=initHead
               headers: headers,
               data: data).just
 
-proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteStream]=none(LengthByteStream)): Result[HttpRequest] =
+proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput)): Result[HttpRequest] =
   let uri = parseUri(url)
   return newHttpRequest(httpMethod, uri, headers, data)
 

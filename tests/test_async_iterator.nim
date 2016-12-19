@@ -92,7 +92,7 @@ recv 39"""
 
 import reactor/async, reactor/loop
 
-proc intGenerator(limit: int): Stream[int] {.asyncIterator.} =
+proc intGenerator(limit: int): Input[int] {.asyncIterator.} =
   var i = 0
   while i < limit:
     echo "yield ", i

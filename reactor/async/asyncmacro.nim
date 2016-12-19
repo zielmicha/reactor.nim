@@ -148,7 +148,7 @@ macro async*(a): untyped =
 macro asyncFor*(iterClause: untyped, body: untyped): untyped =
   ## An asynchronous version of `for` that works on Streams. Example:
   ## ```
-  ## proc simplePipe(src: Stream[int], dst: Provider[int]) {.async.} =
+  ## proc simplePipe(src: Input[int], dst: Output[int]) {.async.} =
   ##   asyncFor item in src:
   ##     echo "piping ", item
   ##     await dst.provide(item)
@@ -176,7 +176,7 @@ macro asyncFor*(iterClause: untyped, body: untyped): untyped =
 macro asyncIterator*(a): untyped =
   ## An iterator that produces elements asynchronously. Example:
   ## ```
-  ## proc intGenerator(): Stream[int] {.asyncIterator.} =
+  ## proc intGenerator(): Input[int] {.asyncIterator.} =
   ##   var i = 0;
   ##   while true:
   ##      asyncYield i
@@ -190,8 +190,8 @@ macro asyncIterator*(a): untyped =
   let body = a[6]
   let returnTypeFull = a[3][0]
 
-  if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Stream"):
-    error("invalid return type from async iterator (expected Stream[T])")
+  if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Input"):
+    error("invalid return type from async iterator (expected Input[T])")
 
   let returnType = returnTypeFull[1]
   let streamProviderPair = parseExpr("newStreamProviderPair[int](bufferSize=32)")

@@ -3,8 +3,8 @@ import reactor/async, reactor/util, reactor/datatypes/basic
 import posix
 
 type UvStream* = ref object of BytePipe
-  inputProvider: ByteProvider
-  outputStream: ByteStream
+  inputProvider: ByteOutput
+  outputStream: ByteInput
   stream*: ptr uv_stream_t
   writeReq: ptr uv_write_t
   writingNow: uv_buf_t

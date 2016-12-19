@@ -102,12 +102,12 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
 
   return HttpResponse(statusCode: statusCode, headers: headers)
 
-proc readWithContentLength*(conn: HttpConnection, length: int64): ByteStream =
+proc readWithContentLength*(conn: HttpConnection, length: int64): ByteInput =
   let (stream, provider) = newStreamProviderPair[byte]()
   pipeLimited(conn.conn.input, provider, length).onErrorClose(provider)
   return stream
 
-proc readChunked*(conn: HttpConnection): ByteStream =
+proc readChunked*(conn: HttpConnection): ByteInput =
   let (stream, provider) = newStreamProviderPair[byte]()
 
   proc piper() {.async.} =

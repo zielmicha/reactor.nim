@@ -1,27 +1,34 @@
+# included from reactor/async.nim
+
 type
   BytePipe* = Pipe[byte]
-  ByteStream* = Stream[byte]
-  ByteProvider* = Provider[byte]
-  LengthByteStream* = LengthStream[byte]
+  ByteInput* = Input[byte]
+  ByteOutput* = Output[byte]
+  LengthByteInput* = LengthInput[byte]
 
-proc read*(self: Stream[byte], count: int): Future[string] =
+type
+  ByteStream* = ByteInput
+  ByteProvider* = ByteOutput
+  LengthByteStream* = LengthByteInput
+
+proc read*(self: Input[byte], count: int): Future[string] =
   ## Reads exactly `count` bytes from stream. Raises error if stream is closed before it manages to read them.
   self.receiveChunk(count, count, string)
 
-proc readSome*(self: Stream[byte], maxCount: int): Future[string] =
+proc readSome*(self: Input[byte], maxCount: int): Future[string] =
   ## Reads at least one byte, but not more than `maxCount`. Raises error if stream is closed anything is read.
   self.receiveChunk(1, maxCount, string)
 
-proc readItem*[T](self: Stream[byte], `type`: typedesc[T], endian=bigEndian): Future[T] =
+proc readItem*[T](self: Input[byte], `type`: typedesc[T], endian=bigEndian): Future[T] =
   return self.read(sizeof(T)).then(proc(x: string): T = unpack(x, T, endian))
 
-proc readChunkPrefixed*(self: Stream[byte]): Future[string] {.async.} =
+proc readChunkPrefixed*(self: Input[byte]): Future[string] {.async.} =
   let length = await self.readItem(uint32)
   if length > uint32(128 * 1024 * 1024):
     asyncRaise("length too big")
   asyncReturn(await self.read(length.int))
 
-proc readChunksPrefixed*(self: Stream[byte]): Stream[string] =
+proc readChunksPrefixed*(self: Input[byte]): Input[string] =
   let (stream, provider) = newStreamProviderPair[string]()
 
   proc pipeChunks() {.async.} =
@@ -35,17 +42,17 @@ proc readChunksPrefixed*(self: Stream[byte]): Stream[string] =
 
   return stream
 
-proc write*[T](self: Provider[T], data: string): Future[void] =
+proc write*[T](self: Output[T], data: string): Future[void] =
   return self.provideAll(data)
 
-proc writeItem*[T](self: Provider[byte], item: T, endian=bigEndian): Future[void] =
+proc writeItem*[T](self: Output[byte], item: T, endian=bigEndian): Future[void] =
   return self.write(pack(item, endian))
 
-proc writeChunkPrefixed*(self: Provider[byte], item: string): Future[void] {.async.} =
+proc writeChunkPrefixed*(self: Output[byte], item: string): Future[void] {.async.} =
   await self.writeItem(item.len.uint32)
   await self.write(item)
 
-proc writeChunksPrefixed*(self: Provider[byte]): Provider[string] =
+proc writeChunksPrefixed*(self: Output[byte]): Output[string] =
   let (stream, provider) = newStreamProviderPair[string]()
 
   proc pipeChunks() {.async.} =
@@ -59,7 +66,7 @@ proc writeChunksPrefixed*(self: Provider[byte]): Provider[string] =
 
   return provider
 
-proc readUntil*(self: Stream[byte], chars: set[char], limit=high(int)): Future[string] {.async.} =
+proc readUntil*(self: Input[byte], chars: set[char], limit=high(int)): Future[string] {.async.} =
   var line = ""
   template addAndTrimToLimit(s: untyped) =
     assert line.len <= limit
@@ -92,12 +99,12 @@ proc readUntil*(self: Stream[byte], chars: set[char], limit=high(int)): Future[s
 
   return line
 
-proc readUntilEof*(self: Stream[byte], limit=high(int)): Future[string] =
+proc readUntilEof*(self: Input[byte], limit=high(int)): Future[string] =
   self.readUntil(chars={}, limit=limit)
 
-proc readLine*(self: Stream[byte], limit=high(int)): Future[string] =
+proc readLine*(self: Input[byte], limit=high(int)): Future[string] =
   return self.readUntil(chars={'\L'}, limit=limit)
 
-proc lines*(self: Stream[byte], limit=high(int)): Stream[string] {.asynciterator.} =
+proc lines*(self: Input[byte], limit=high(int)): Input[string] {.asynciterator.} =
   while true:
     asyncYield(await self.readLine(limit=limit))

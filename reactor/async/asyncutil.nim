@@ -35,10 +35,10 @@ type
 
   SerialQueue* = ref object
     ## A queue that executes asynchronous functions serially
-    streamBefore: Stream[SerialQueueItem]
-    providerBefore: Provider[SerialQueueItem]
-    streamAfter: Stream[proc(): Future[void]]
-    providerAfter: Provider[proc(): Future[void]]
+    streamBefore: Input[SerialQueueItem]
+    providerBefore: Output[SerialQueueItem]
+    streamAfter: Input[proc(): Future[void]]
+    providerAfter: Output[proc(): Future[void]]
 
 proc queueHandlerBefore(q: SerialQueue) {.async.} =
   asyncFor item in q.streamBefore:
@@ -89,16 +89,16 @@ proc enqueue*[T](q: SerialQueue, before: (proc(): Future[void]), after: (proc():
 
 # forEach
 
-proc forEachChunk*[T](self: Stream[T], function: (proc(x: seq[T]))): Future[void] {.async.} =
+proc forEachChunk*[T](self: Input[T], function: (proc(x: seq[T]))): Future[void] {.async.} =
   while true:
     let data = await self.receiveSome(4096)
     function(data)
 
-proc forEach*[T](self: Stream[T], function: (proc(x: T))): Future[void] {.async.} =
+proc forEach*[T](self: Input[T], function: (proc(x: T))): Future[void] {.async.} =
   asyncFor item in self:
     function(item)
 
-proc pipeLimited*[T](self: Stream[T], provider: Provider[T], limit: int64, close=true): Future[void] {.async.} =
+proc pipeLimited*[T](self: Input[T], provider: Output[T], limit: int64, close=true): Future[void] {.async.} =
   var limit = limit
   while limit > 0:
     let data = await self.receiveSome(min(limit, (baseBufferSizeFor(T) * 8).int64).int)
@@ -109,20 +109,20 @@ proc pipeLimited*[T](self: Stream[T], provider: Provider[T], limit: int64, close
   if close:
     provider.sendClose(JustClose)
 
-proc newConstStream*[T](val: seq[T]): Stream[T] =
+proc newConstStream*[T](val: seq[T]): Input[T] =
   let (stream, provider) = newStreamProviderPair[T]()
   provider.provideAll(val).ignore()
   return stream
 
-proc newConstStream*(val: string): Stream[byte] =
+proc newConstStream*(val: string): Input[byte] =
   let (stream, provider) = newStreamProviderPair[byte]()
   provider.provideAll(val).ignore()
   return stream
 
-proc newLengthStream*[T](data: seq[T]): LengthStream[T] =
+proc newLengthStream*[T](data: seq[T]): LengthInput[T] =
   (data.len.int64, newConstStream(data))
 
-proc newLengthStream*(data: string): LengthStream[byte] =
+proc newLengthStream*(data: string): LengthInput[byte] =
   (data.len.int64, newConstStream(data))
 
 proc zip*[A](a: seq[Future[A]]): Future[seq[A]] {.async.} =
