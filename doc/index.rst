@@ -60,6 +60,10 @@ Modules
 
   HTTP client.
 
+- ``reactor/process`` (`API docs <api/reactor/process.html>`_)
+
+  Spawn new processes.
+
 - ``reactor/redis`` (`API docs <api/reactor/redis.html>`_)
 
   Redis client.

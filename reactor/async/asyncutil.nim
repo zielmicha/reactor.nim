@@ -155,3 +155,10 @@ proc unwrapPipeFuture*[T](f: Future[Pipe[T]]): Pipe[T] =
 proc pipe*[T](a: Pipe[T], b: Pipe[T]) =
   pipe(a.input, b.output)
   pipe(b.input, a.output)
+
+proc asyncPipe*[T](f: proc(s: Input[T]): Future[void]): Output[T] =
+  ## Create a new pipe, return output side. Call `f` in background with input as an argument
+  ## - when it errors, close the output.
+  let (input, output) = newInputOutputPair[T]()
+  f(input).onErrorClose(input)
+  return output

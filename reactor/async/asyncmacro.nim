@@ -226,4 +226,3 @@ macro asyncIterator*(a): untyped =
     result[3].add param
   result[4] = pragmas
   result[6] = asyncBody
-

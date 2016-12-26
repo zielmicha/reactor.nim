@@ -15,7 +15,7 @@ type
   TcpServer* = ref object
     incomingConnections*: Stream[TcpConnection]
     incomingConnectionsProvider: Provider[TcpConnection]
-    stream: ptr uv_tcp_t
+    sockAddr: tuple[address: IpAddress, port: int]
 
   TcpConnection* = ref object of uvstream.UvStream
 
@@ -39,17 +39,23 @@ proc newTcpConnection(client: ptr uv_handle_t): TcpConnection =
 
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
   ## Get address of a remote peer (similar to POSIX getpeername).
-  var name: SockAddr
+  var name: SockAddr_storage
   var length = sizeof(name).cint
   checkZero "getpeername", uv_tcp_getpeername(conn.stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
-proc getSockAddr*(conn: TcpBoundSocket | TcpConnection | TcpServer): tuple[address: IpAddress, port: int] =
+proc getSockAddr(stream: ptr uv_stream_t): tuple[address: IpAddress, port: int] =
   ## Get address of a TCP socket (similar to POSIX getsockname).
-  var name: SockAddr
+  var name: SockAddr_storage
   var length = sizeof(name).cint
-  checkZero "getsockname", uv_tcp_getsockname(conn.stream, cast[ptr SockAddr](addr name), addr length)
+  checkZero "getsockname", uv_tcp_getsockname(stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
+
+proc getSockAddr*(conn: TcpBoundSocket | TcpConnection): tuple[address: IpAddress, port: int] =
+  return getSockAddr(conn.stream)
+
+proc getSockAddr*(conn: TcpServer): auto =
+  return conn.sockAddr
 
 proc onNewConnection(server: ptr uv_stream_t; status: cint) {.cdecl.} =
   let serverObj = cast[TcpServer](server.data)
@@ -79,7 +85,6 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
   (serverObj.incomingConnections, serverObj.incomingConnectionsProvider) = newStreamProviderPair[TcpConnection]()
 
   proc closeTcpServer(err: ref Exception) =
-    serverObj.stream = nil
     uv_close(cast[ptr uv_handle_t](server), tcpServerClosed)
 
   # FIXME: leak
@@ -116,6 +121,7 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
         break
 
     let serverObj = newTcpServer(server)
+    serverObj.sockAddr = getSockAddr(server) # for getSockAddr
 
     let listenErr = uv_listen(cast[ptr uv_stream_t](server), 5, onNewConnection)
     if listenErr < 0:

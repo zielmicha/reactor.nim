@@ -21,6 +21,7 @@ proc startProcess*(command: seq[string],
                    environ: TableRef[string, string]=nil,
                    additionalEnv: openarray[tuple[k: string, v: string]]=[],
                    additionalFiles: openarray[tuple[target: cint, src: cint]]=[]): Process =
+  ## Start a new process.
   let process = cast[ptr uv_process_t](newUvHandle(UV_PROCESS))
 
   assert command.len > 0
@@ -89,9 +90,11 @@ proc startProcess*(command: seq[string],
     result.completer.completeError(uvError(res, "spawn " & $command))
 
 proc wait*(process: Process): Future[int] =
+  ## Wait until process returns.
   return process.completer.getFuture
 
 proc waitForSuccess*(process: Process): Future[void] =
+  ## Wait until process returns. Return error if exit code is other than 0.
   process.wait().then(proc(code: int): Future[void] =
                       if code != 0: return now(error(void, "bad exit code $1 from $2" % [$code, $process.args]))
                       else: return now(just()))
