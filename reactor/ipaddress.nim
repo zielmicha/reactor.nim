@@ -1,5 +1,5 @@
 import strutils, sequtils, future, hashes
-import collections/bytes
+import collections/bytes, collections/iterate
 
 type
   Interface[T] = tuple[address: T, mask: int]
@@ -85,13 +85,41 @@ proc `[]`*(a: IpAddress, k: int): uint8 =
 proc `$`*(a: Ip4Address): string =
   "$1.$2.$3.$4" % [$a[0], $a[1], $a[2], $a[3]]
 
-proc `$`*(a: Ip6Address): string =
-  var s = ""
+proc toCanonicalString(a: Ip6Address): string =
+  ## Converts IPv6 to canonical text representation.
+  ## See: https://tools.ietf.org/html/rfc5952#section-4
+  var groups: seq[string] = @[]
   for i in 0..7:
-    s.add a[2*i].int.toHex(2)
-    s.add a[2*i+1].int.toHex(2)
-    if i != 7: s.add ":"
-  return s
+    var group = a[2*i].int.toHex(2) & a[2*i+1].int.toHex(2)
+    group = group.strip(trailing=false, leading=true, chars={'0'}).toLowerAscii
+    if group == "": group = "0"
+    groups.add(group)
+
+  var zeroRuns: seq[int] = @[]
+  for i in 0..7:
+    var runLength = 0
+    for j in i..7:
+      if groups[j] != "0": break
+      runLength += 1
+    zeroRuns.add(runLength)
+
+  let maxRun = argmax(zeroRuns)
+
+  if zeroRuns[maxRun] == 8:
+    return "::"
+
+  if zeroRuns[maxRun] > 1:
+    groups = groups[0..<maxRun] & @[""] & groups[maxRun + zeroRuns[maxRun]..^1]
+
+  result = groups.join(":")
+
+  if result.startswith(":"):
+    result = ":" & result
+  if result.endswith(":"):
+    result = result & ":"
+
+proc `$`*(a: Ip6Address): string =
+  a.toCanonicalString
 
 proc `$`*(a: IpAddress): string =
   case a.kind:
@@ -114,7 +142,7 @@ proc addressBitLength*(a: Ip4Address): int = addressBitLength(ip4)
 proc addressBitLength*(a: Ip6Address): int = addressBitLength(ip6)
 
 proc parseAddress4*(a: string): Ip4Address =
-  let parts = a.split(".").map(a => parseInt(a).uint8)
+  let parts = a.split(".").map(a => parseInt(a).uint8).toSeq
   if parts.len != 4:
     raise newException(ValueError, "invalid IPv4 address ($1)" % [$a])
   [parts[0], parts[1], parts[2], parts[3]].Ip4Address
@@ -258,8 +286,25 @@ proc hash*(x: IpAddress): int =
       return (array[16, uint8](x.ip6)).hash
 
 when isMainModule:
-  echo parseAddress("127.0.0.1")
-  echo parseAddress("::1")
-  echo parseAddress("::")
-  echo parseAddress("123:4555::54:65")
+  assert parseAddress("127.0.0.1") == [127'u8, 0'u8, 0'u8, 1'u8].Ip4Address
+  assert parseAddress("::1") == [0'u8, 0'u8, 0'u8, 0'u8,
+                                 0'u8, 0'u8, 0'u8, 0'u8,
+                                 0'u8, 0'u8, 0'u8, 0'u8,
+                                 0'u8, 0'u8, 0'u8, 1'u8].Ip6Address
+  assert parseAddress("::") == [0'u8, 0'u8, 0'u8, 0'u8,
+                                0'u8, 0'u8, 0'u8, 0'u8,
+                                0'u8, 0'u8, 0'u8, 0'u8,
+                                0'u8, 0'u8, 0'u8, 0'u8].Ip6Address
+  assert parseAddress("123:4555::54:65") == [0x1'u8, 0x23'u8, 0x45'u8, 0x55'u8,
+                                             0'u8, 0'u8, 0'u8, 0'u8,
+                                             0'u8, 0'u8, 0'u8, 0'u8,
+                                             0'u8, 0x54'u8, 0'u8, 0x65'u8].Ip6Address
   echo parseAddress("0123:4567:89ab:cdef:0123:4567:89ab:cdef")
+
+  assert($parseAddress("::") == "::")
+  assert($parseAddress("::1") == "::1")
+  assert($parseAddress("1::") == "1::")
+  assert($parseAddress("1::1") == "1::1")
+  assert($parseAddress("2001:db8::1") == "2001:db8::1")
+  assert($parseAddress("2001:db8:0:0:0:0:2:1") == "2001:db8::2:1")
+  assert($parseAddress("2001:db8:0:1:1:1:1:1") == "2001:db8:0:1:1:1:1:1")
