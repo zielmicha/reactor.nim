@@ -271,10 +271,10 @@ proc nthAddress*(i: IpInterface, n: int64): IpAddress =
 
   case i.address.kind:
     of ip4:
-      let rest = pack(n.uint32)
+      let rest = pack(n.uint32, bigEndian)
       mixAddr(i.address.ip4, 4)
     of ip6:
-      let rest = pack(0.uint64) & pack(n.uint64)
+      let rest = pack(0.uint64, bigEndian) & pack(n.uint64, bigEndian)
       mixAddr(i.address.ip6, 16)
 
 proc hash*(x: IpAddress): int =

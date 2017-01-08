@@ -4,8 +4,7 @@ import tables, hashes, strutils
 export future.`=>`, future.`->`
 
 import reactor/util
-import reactor/datatypes/queue
-import reactor/datatypes/basic
+import collections/views, collections/queue
 import reactor/loop
 
 const debugFutures = not defined(release)
@@ -18,8 +17,7 @@ include reactor/async/asyncmacro
 include reactor/async/bytes
 include reactor/async/asyncutil
 
-import reactor/datatypes/basic
-export ConstView, View, ByteView, viewToConstView, seqView, basic.len, singleItemView, copyTo, copyFrom, addrView, slice
+export views
 
 when not compileOption("boundChecks"):
   {.warning: "compiling without boundChecks is dangerous and unsupported".}
