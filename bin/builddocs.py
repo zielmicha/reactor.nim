@@ -43,6 +43,7 @@ for root, dirs, files in os.walk("doc/"):
 
 STYLE = '''
 <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel=stylesheet>
+<style type="text/css">h1.title { font-size: 36px; } h1 { font-size: 24px; }</style>
 '''
 
 def postprocess_html(data):

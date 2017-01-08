@@ -9,11 +9,16 @@ Introduction
 
 *reactor.nim* doesn't use asynchronous mechanisms from asyncdispatch stdlib module and instead provides its own. They are arguably richer and more performant. The API is inspired by Dart and Midori OS (in particular by `this article <http://joeduffyblog.com/2015/11/19/asynchronous-everything/>`_).
 
-*reactor.nim* currently works on Linux and Mac OSX. Other platforms supported by libuv and Nim (like Windows) support should be trivial to add - see issue `#3 <https://github.com/zielmicha/reactor.nim/issues/3>`_.
-
-The library is currently in development. You probably shouldn't use it yet for any mission critical applications. The documentation is currently sparse. For now you can look at `examples <https://github.com/zielmicha/reactor.nim/tree/master/examples>`_ and `tests <https://github.com/zielmicha/reactor.nim/tree/master/tests>`_.
+*reactor.nim* currently works on Linux and macOS. Windows support is in works - see issue `#3 <https://github.com/zielmicha/reactor.nim/issues/3>`_. Other platforms supported by libuv and Nim should be relatively easy to add.
 
 As you are probably going to deal with untrusted data, you should enable range checks even if compiling in release mode - see example `nim.cfg <https://github.com/zielmicha/reactor.nim/blob/master/nim.cfg>`_. *reactor.nim* treats security very seriously.
+
+How to start
+=========
+
+- `Tutorial <tutorial.html>`_
+- `Examples <https://github.com/zielmicha/reactor.nim/tree/master/examples>`_
+- `Tests <https://github.com/zielmicha/reactor.nim/tree/master/tests>`_
 
 Modules
 =========
@@ -80,3 +85,7 @@ There are libraries that are not part of *reactor.nim*, but are compatible with 
 - `reactorfuse <https://github.com/zielmicha/reactorfuse>`_
 
   Filesystem in userspace (FUSE).
+
+- `capnp.nim <https://github.com/zielmicha/capnp.nim>`_
+
+  Cap'n Proto serialization and RPC.
