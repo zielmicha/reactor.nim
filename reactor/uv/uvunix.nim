@@ -5,7 +5,7 @@ import reactor/async
 import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, reactor/uv/errno
 
 type
-  UnixConnection* = ref object of uvstream.UvStream
+  UnixConnection* = ref object of uvstream.UvPipe
 
 proc connectUnix*(path: string): Future[UnixConnection] =
   ## Connect to TCP server running on host:port.
@@ -27,7 +27,7 @@ proc connectUnix*(path: string): Future[UnixConnection] =
       state.completer.completeError(uvError(status, state.errMsg))
       uv_close(req.handle, freeUvMemory)
     else:
-      state.completer.complete(newUvInput[UnixConnection](req.handle))
+      state.completer.complete(newUvPipe[UnixConnection](req.handle))
 
     GC_unref(state)
 

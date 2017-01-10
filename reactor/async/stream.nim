@@ -358,12 +358,12 @@ proc flatMapperFunc[T, R](f: (proc(x: T): seq[R])): auto =
       for item in f(source[i]):
         target.add item
 
-proc pipe*[T, R](self: Input[T], target: Output[R], function: (proc(x: T): R)): Future[void] =
+proc pipe*[T, R](self: Input[T], target: Output[R], function: (proc(x: T): R)) =
   ## Copy data from ``Input`` to ``Output`` while processing them with ``function``.
   # TODO: pipe should return Future[void]
   pipeChunks(self, target, mapperFunc(function))
 
-proc pipe*[T](self: Input[T], target: Output[T]): Future[void] =
+proc pipe*[T](self: Input[T], target: Output[T]) =
   ## Copy data from ``Input`` to ``Output``.
   pipeChunks(self, target, nil)
 

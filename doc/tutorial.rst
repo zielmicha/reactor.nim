@@ -24,7 +24,7 @@ Hello world
     # Your program will terminate when main() finishes
     main().runMain
 
-``asyncSleep(x: int)`` is a function that returns ``Future[void]`` that completes when a ``x`` ms passes. ``then(f: Future[T], p: proc(arg: T): R): Future[R]`` function invokes function ``p`` when future ``f`` completes. The value of ``f`` is passed to the function (in our case, the value is ``void``, so the function doesn't take any arguments).
+``asyncSleep(x: int)`` is a function that returns ``Future[void]`` that completes when ``x`` ms passes. ``then(f: Future[T], p: proc(arg: T): R): Future[R]`` function invokes function ``p`` when future ``f`` completes. The value of ``f`` is passed to the function (in our case, the value is ``void``, so the function doesn't take any arguments).
 
 ``runMain`` function takes care of starting event loop and waiting until the program finishes.
 
