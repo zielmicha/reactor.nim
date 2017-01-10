@@ -31,7 +31,7 @@ proc readChunksPrefixed*(self: Input[byte]): Input[string] =
   proc pipeChunks() {.async.} =
     while true:
       let chunk = await self.readChunkPrefixed()
-      await output.provide(chunk)
+      await output.send(chunk)
 
   pipeChunks().onSuccessOrError(
     onSuccess=nil,
@@ -40,7 +40,7 @@ proc readChunksPrefixed*(self: Input[byte]): Input[string] =
   return input
 
 proc write*[T](self: Output[T], data: string): Future[void] =
-  return self.provideAll(data)
+  return self.sendAll(data)
 
 proc writeItem*[T](self: Output[byte], item: T, endian=bigEndian): Future[void] =
   return self.write(pack(item, endian))

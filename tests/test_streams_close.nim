@@ -15,33 +15,33 @@ Error: reader closed [Exception]"""
 import reactor/async, reactor/loop
 
 proc test1() {.async.} =
-  let (stream, provider) = newInputOutputPair[int]()
+  let (input, output) = newInputOutputPair[int]()
 
-  await provider.provide(5)
-  await provider.provide(6)
-  provider.sendClose(JustClose)
+  await output.send(5)
+  await output.send(6)
+  output.sendClose(JustClose)
 
-  (await stream.receiveAll(2)).echo
+  (await input.receiveAll(2)).echo
 
 proc test2() {.async.} =
-  let (stream, provider) = newInputOutputPair[int]()
+  let (input, output) = newInputOutputPair[int]()
 
-  await provider.provide(5)
-  await provider.provide(6)
-  provider.sendClose(JustClose)
+  await output.send(5)
+  await output.send(6)
+  output.sendClose(JustClose)
 
-  (await stream.receiveAll(1)).echo
-  (await stream.receiveSome(10)).echo
+  (await input.receiveAll(1)).echo
+  (await input.receiveSome(10)).echo
 
 proc test3() {.async.} =
-  let (stream, provider) = newInputOutputPair[int]()
+  let (stream, output) = newInputOutputPair[int]()
 
   echo "1"
-  await provider.provide(1)
+  await output.send(1)
   echo "2"
   stream.recvClose(newException(ValueError, "reader closed"))
   echo "3"
-  await provider.provide(5)
+  await output.send(5)
   echo "4"
 
 test1().ignore()

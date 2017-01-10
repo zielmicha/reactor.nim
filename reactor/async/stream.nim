@@ -77,7 +77,7 @@ proc isRecvClosed*(self: Output): bool =
 proc isSendClosed*(self: Input): bool =
   self.sendClosed
 
-proc provideSome*[T](self: Output[T], data: ConstView[T]): int =
+proc sendSome*[T](self: Output[T], data: ConstView[T]): int =
   ## Provides some items pointed by view `data`. Returns how many items
   ## were actualy provided.
   self.checkProvide()
@@ -88,7 +88,7 @@ proc provideSome*[T](self: Output[T], data: ConstView[T]): int =
   sself.queue.pushBackMany(data.slice(0, doPush))
   return doPush
 
-proc provideAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
+proc sendAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
   ## Provides items from `data`. Returns Future that finishes when all
   ## items are provided.
   when type(data) is string and not (T is byte):
@@ -107,7 +107,7 @@ proc provideAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
     var data = data
     let dataView = seqView(data)
 
-  var offset = self.provideSome(dataView)
+  var offset = self.sendSome(dataView)
   if offset == data.len:
     return now(just())
 
@@ -124,14 +124,14 @@ proc provideAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
       self.onSendReady.removeListener sendListenerId
       return
 
-    offset += self.provideSome(dataView.slice(offset))
+    offset += self.sendSome(dataView.slice(offset))
     if offset == data.len:
       completer.complete()
       self.onSendReady.removeListener sendListenerId)
 
   return completer.getFuture
 
-proc provide*[T](self: Output[T], item: T): Future[void] =
+proc send*[T](self: Output[T], item: T): Future[void] =
   ## Provides a single item. Returns Future that finishes when the item
   ## is pushed into queue.
 
@@ -142,7 +142,7 @@ proc provide*[T](self: Output[T], item: T): Future[void] =
   if sself.recvClosed:
     return now(error(void, sself.recvCloseException))
 
-  if self.provideSome(singleItemView(item)) == 1:
+  if self.sendSome(singleItemView(item)) == 1:
     return now(just())
 
   let completer = newCompleter[void]()
@@ -154,23 +154,23 @@ proc provide*[T](self: Output[T], item: T): Future[void] =
       self.onSendReady.removeListener sendListenerId
       return
 
-    if self.provideSome(singleItemView(item)) == 1:
+    if self.sendSome(singleItemView(item)) == 1:
       completer.complete()
       self.onSendReady.removeListener sendListenerId)
 
   return completer.getFuture
 
-proc send*[T](self: Output[T], item: T): Future[void] = return self.send(item) # experimental alias
+{.deprecated: [provide: send, provideAll: sendAll, provideSome: sendSome].}
 
 proc sendClose*(self: Output, exc: ref Exception) =
-  ## Closes the provider -- signals that no more items will be provided.
+  ## Closes the output stream -- signals that no more items will be provided.
   if sself.sendClosed: return
   sself.sendClosed = true
   sself.sendCloseException = exc
   sself.onRecvReady.callListener()
 
 proc recvClose*[T](self: Input[T], exc: ref Exception) =
-  ## Closes the stream -- signals that no more items will be received.
+  ## Closes the input stream -- signals that no more items will be received.
   if self.recvClosed: return
   self.recvClosed = true
   self.recvCloseException = exc
@@ -217,7 +217,7 @@ proc waitForData*[T](self: Input[T], allowSpurious=false): Future[void] =
   return completer.getFuture
 
 proc waitForSpace*[T](self: Output[T], allowSpurious=false): Future[void] =
-  ## Waits until space is available in the buffer. For use with `provideSome` and `freeBufferSize`.
+  ## Waits until space is available in the buffer. For use with `sendSome` and `freeBufferSize`.
   if self.freeBufferSize != 0:
     return now(just())
 
@@ -327,14 +327,14 @@ proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source
       var didSend: int
       if function == nil:
         when T is R:
-          didSend = target.provideSome(view)
+          didSend = target.sendSome(view)
         else:
           doAssert(false)
       else:
         let doSend = target.freeBufferSize()
         var buffer: seq[R]
         function(view, buffer)
-        didSend = target.provideSome(buffer.seqView)
+        didSend = target.sendSome(buffer.seqView)
 
       self.discardItems(didSend)
       if didSend == 0: break

@@ -43,7 +43,7 @@ type
 proc queueHandlerBefore(q: SerialQueue) {.async.} =
   asyncFor item in q.streamBefore:
     await item.before()
-    await q.providerAfter.provide(item.after)
+    await q.providerAfter.send(item.after)
 
 proc queueHandlerAfter(q: SerialQueue) {.async.} =
   asyncFor item in q.streamAfter:
@@ -58,7 +58,7 @@ proc newSerialQueue*(): SerialQueue =
   return q
 
 proc enqueueInternal(q: SerialQueue, before: (proc(): Future[void]), after: (proc(): Future[void])): Future[void] =
-  return q.providerBefore.provide(SerialQueueItem(before: before, after: after))
+  return q.providerBefore.send(SerialQueueItem(before: before, after: after))
 
 proc enqueue*[T](q: SerialQueue, before: (proc(): Future[void]), after: (proc(): Future[T])): Future[T] {.async.} =
   ## Executes all `before`s and `after`s in the same order. Additionally, if `enqueue` A is executed before `enqueue` B
@@ -104,19 +104,19 @@ proc pipeLimited*[T](self: Input[T], provider: Output[T], limit: int64, close=tr
     let data = await self.receiveSome(min(limit, (baseBufferSizeFor(T) * 8).int64).int)
     limit -= data.len
     assert limit >= 0
-    await provider.provideAll(data)
+    await provider.sendAll(data)
 
   if close:
     provider.sendClose(JustClose)
 
 proc newConstStream*[T](val: seq[T]): Input[T] =
   let (stream, provider) = newInputOutputPair[T]()
-  provider.provideAll(val).ignore()
+  provider.sendAll(val).ignore()
   return stream
 
 proc newConstStream*(val: string): Input[byte] =
   let (stream, provider) = newInputOutputPair[byte]()
-  provider.provideAll(val).ignore()
+  provider.sendAll(val).ignore()
   return stream
 
 proc newLengthStream*[T](data: seq[T]): LengthInput[T] =

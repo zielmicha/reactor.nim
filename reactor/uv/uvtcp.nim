@@ -13,11 +13,11 @@ else:
 
 type
   TcpServer* = ref object
-    incomingConnections*: Stream[TcpConnection]
-    incomingConnectionsProvider: Provider[TcpConnection]
+    incomingConnections*: Input[TcpConnection]
+    incomingConnectionsProvider: Output[TcpConnection]
     sockAddr: tuple[address: IpAddress, port: int]
 
-  TcpConnection* = ref object of uvstream.UvStream
+  TcpConnection* = ref object of uvstream.UvPipe
 
   TcpConnectionData* = object
     host*: IpAddress
@@ -35,7 +35,7 @@ type
 export UvStream
 
 proc newTcpConnection(client: ptr uv_handle_t): TcpConnection =
-  return newUvStream[TcpConnection](cast[ptr uv_stream_t](client))
+  return newUvPipe[TcpConnection](cast[ptr uv_stream_t](client))
 
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
   ## Get address of a remote peer (similar to POSIX getpeername).
@@ -195,7 +195,7 @@ proc connectTcpAsHandle(info: TcpConnectionData): Future[ptr uv_stream_t] =
     return state.completer.getFuture
 
 proc connectTcp*(info: TcpConnectionData): Future[TcpConnection] =
-  return connectTcpAsHandle(info).then(x => newUvStream[TcpConnection](x))
+  return connectTcpAsHandle(info).then(x => newUvPipe[TcpConnection](x))
 
 proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
   return connectTcp(TcpConnectionData(host: host, port: port))

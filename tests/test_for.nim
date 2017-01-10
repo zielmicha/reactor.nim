@@ -6,7 +6,7 @@ here"""
 
 import reactor/async, reactor/loop, future
 
-proc simplePipe(src: Stream[int]) {.async.} =
+proc simplePipe(src: Input[int]) {.async.} =
    asyncFor item in src:
      echo "item ", item
    echo "here"

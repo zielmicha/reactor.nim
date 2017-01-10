@@ -151,7 +151,7 @@ macro asyncFor*(iterClause: untyped, body: untyped): untyped =
   ## proc simplePipe(src: Input[int], dst: Output[int]) {.async.} =
   ##   asyncFor item in src:
   ##     echo "piping ", item
-  ##     await dst.provide(item)
+  ##     await dst.send(item)
   ## ```
   if iterClause.kind != nnkInfix or iterClause[0] != newIdentNode(!"in"):
     error("expected `x in y` after for")
@@ -209,7 +209,7 @@ macro asyncIterator*(a): untyped =
 
     template asyncYield(e: untyped): untyped =
       mixin await
-      await asyncProvider.provide(e)
+      await asyncProvider.send(e)
 
     let iter = iterator(): AsyncIterator {.closure.} =
       `body`

@@ -2,9 +2,9 @@ import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/errno
 import reactor/async, reactor/util, collections/views
 import posix
 
-type UvStream* = ref object of BytePipe
-  inputProvider: ByteOutput
-  outputStream: ByteInput
+type UvPipe* = ref object of BytePipe
+  inputOther: ByteOutput
+  outputOther: ByteInput
   stream*: ptr uv_stream_t
   writeReq: ptr uv_write_t
   writingNow: uv_buf_t
@@ -13,91 +13,91 @@ type UvStream* = ref object of BytePipe
   closed: bool
 
 proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
-  let self = cast[UvStream](stream.data)
+  let self = cast[UvPipe](stream.data)
   if self.closed: return
 
   defer:
     if buf.base != nil: dealloc(buf.base)
 
-  if nread == UV_ENOBUFS or self.inputProvider.freeBufferSize == nread:
+  if nread == UV_ENOBUFS or self.inputOther.freeBufferSize == nread:
     checkZero "read_stop", uv_read_stop(stream)
     if nread == UV_ENOBUFS:
       return
 
   if nread < 0:
     if nread == UV_EOF:
-      self.inputProvider.sendClose(JustClose)
+      self.inputOther.sendClose(JustClose)
     else:
-      self.inputProvider.sendClose(uvError(nread, "read stream"))
+      self.inputOther.sendClose(uvError(nread, "read stream"))
   else:
     assert nread <= buf.len
-    let provided = self.inputProvider.provideSome(ByteView(data: buf.base, size: nread))
+    let provided = self.inputOther.provideSome(ByteView(data: buf.base, size: nread))
     assert provided == nread
 
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
   # TODO: avoid copy (directly point to the queue buffer)
-  let self = cast[UvStream](stream.data)
+  let self = cast[UvPipe](stream.data)
 
-  let size = min(suggestedSize, self.inputProvider.freeBufferSize)
+  let size = min(suggestedSize, self.inputOther.freeBufferSize)
   buf.base = alloc0(size)
   buf.len = size
 
-proc recvStart(self: UvStream) =
+proc recvStart(self: UvPipe) =
   checkZero "read_start", uv_read_start(self.stream, allocCb, readCb)
 
-proc writeReady(self: UvStream)
+proc writeReady(self: UvPipe)
 
 proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
   if status == UV_ECANCELED:
     return
 
-  let self = cast[UvStream](req.data)
+  let self = cast[UvPipe](req.data)
   if self.closed:
     return
 
   if status < 0:
-    self.inputProvider.sendClose(uvError(status, "stream write"))
+    self.inputOther.sendClose(uvError(status, "stream write"))
   else:
-    self.outputStream.discardItems self.writingNow.len
+    self.outputOther.discardItems self.writingNow.len
     self.writeReady()
 
 proc freeStream(stream: ptr uv_stream_t) {.cdecl.} =
   freeUvMemory(stream)
 
-proc closeStream(self: UvStream) =
+proc closeStream(self: UvPipe) =
   echo "closing stream"
   self.closed = true
   uv_close(cast[ptr uv_handle_t](self.stream), freeStream)
-  self.inputProvider.sendClose(JustClose)
-  self.outputStream.recvClose(JustClose)
+  self.inputOther.sendClose(JustClose)
+  self.outputOther.recvClose(JustClose)
 
-proc writeReady(self: UvStream) =
+proc writeReady(self: UvPipe) =
   # TODO: write many buffers (peekManyMany?)
-  let waiting = self.outputStream.peekMany()
+  let waiting = self.outputOther.peekMany()
 
   if self.closed:
     return
 
 
   if waiting.len == 0:
-    if self.outputStream.isSendClosed:
-      logClose(self.outputStream.getSendCloseException)
+    if self.outputOther.isSendClosed:
+      logClose(self.outputOther.getSendCloseException)
       closeStream(self)
     else:
-      self.outputStream.onRecvReady.addListener proc() = self.writeReady()
+      self.outputOther.onRecvReady.addListener proc() = self.writeReady()
   else:
-    self.outputStream.onRecvReady.removeAllListeners
+    self.outputOther.onRecvReady.removeAllListeners
 
     self.writingNow = uv_buf_t(base: waiting.data, len: waiting.size)
     checkZero "write", uv_write(self.writeReq, self.stream, addr self.writingNow, 1, writeCb)
 
-proc resume*(self: UvStream) =
+proc resume*(self: UvPipe) =
   self.recvStart()
 
-proc newUvStream*[T](stream: ptr uv_stream_t, paused=false): T =
+proc newUvPipe*[T](stream: ptr uv_stream_t, paused=false): T =
   let self = new(T)
-  (self.input, self.inputProvider) = newInputOutputPair[byte]()
-  (self.outputStream, self.output) = newInputOutputPair[byte]()
+  (self.input, self.inputOther) = newInputOutputPair[byte]()
+  (self.outputOther, self.output) = newInputOutputPair[byte]()
 
   self.stream = stream
   self.paused = paused
@@ -110,15 +110,15 @@ proc newUvStream*[T](stream: ptr uv_stream_t, paused=false): T =
   if not self.paused:
     self.recvStart()
 
-  self.inputProvider.onSendReady.addListener proc() =
-    if self.inputProvider.isRecvClosed:
-      logClose(self.inputProvider.getRecvCloseException)
+  self.inputOther.onSendReady.addListener proc() =
+    if self.inputOther.isRecvClosed:
+      logClose(self.inputOther.getRecvCloseException)
       return
 
     if not self.paused:
       self.recvStart()
 
-  self.outputStream.onRecvReady.addListener proc() =
+  self.outputOther.onRecvReady.addListener proc() =
     self.writeReady()
 
   return self

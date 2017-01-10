@@ -4,12 +4,11 @@ more X"""
 import reactor/async, reactor/loop
 
 proc main() {.async.} =
-  let (stream, provider) = newInputOutputPair[byte]()
-  let writeFut = provider.write("\0\0\0\x05helloX")
-  let data = await stream.readChunkPrefixed()
+  let (input, output) = newInputOutputPair[byte]()
+  let writeFut = output.write("\0\0\0\x05helloX")
+  let data = await input.readChunkPrefixed()
   echo "read ", data
-  echo "more ", await stream.read(1)
+  echo "more ", await input.read(1)
   await writeFut
 
-main().ignore()
-runLoop()
+main().runMain()

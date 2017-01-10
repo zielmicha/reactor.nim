@@ -27,7 +27,7 @@ proc connectUnix*(path: string): Future[UnixConnection] =
       state.completer.completeError(uvError(status, state.errMsg))
       uv_close(req.handle, freeUvMemory)
     else:
-      state.completer.complete(newUvStream[UnixConnection](req.handle))
+      state.completer.complete(newUvInput[UnixConnection](req.handle))
 
     GC_unref(state)
 

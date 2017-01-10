@@ -9,8 +9,8 @@ type
 
   UdpSocket* = ref object of Pipe[UdpPacket]
     handle: ptr uv_udp_t
-    inputProvider: Provider[UdpPacket]
-    outputStream: Stream[UdpPacket]
+    inputProvider: Output[UdpPacket]
+    outputStream: Input[UdpPacket]
     alreadyBound: bool
 
 proc handleOutput(sock: UdpSocket) {.async.} =
@@ -67,7 +67,7 @@ proc recvCb(handle: ptr uv_udp_t; nread: int; buf: ptr uv_buf_t; `addr`: ptr Soc
     discard socket.inputProvider.provide(packet)
 
 proc bindAddress*(socket: UdpSocket, host: IpAddress, port: int): Result[void] =
-  assert (not socket.alreadyBound)
+  assert(not socket.alreadyBound)
   socket.alreadyBound = true
 
   let sockaddress = cast[ptr SockAddr](alloc0(sizeof(Sockaddr_storage)))

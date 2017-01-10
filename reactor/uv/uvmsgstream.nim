@@ -3,7 +3,7 @@ import reactor/async, reactor/util, collections/views
 
 type MsgPipe* = ref object of Pipe[string]
   inputProvider: Provider[string]
-  outputStream: Stream[string]
+  outputStream: Input[string]
   stream*: ptr uv_stream_t
   buffer: string
   writeReq: ptr uv_write_t
