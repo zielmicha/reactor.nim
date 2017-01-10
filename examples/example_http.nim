@@ -6,8 +6,8 @@ proc main() {.async.} =
   # we use ``await`` to wait for a Future[HttpResponse] to finish
   let resp = await request(newHttpRequest("GET", "http://google.com/").get)
   echo "code: ", resp.statusCode
-  # resp.dataStream is of type Stream[byte] - it's a stream of bytes
-  let body = resp.dataStream
+  # resp.dataInput is of type ByteInput
+  let body = resp.dataInput
   # read first 10 bytes of body
   echo (await body.read(10))
 

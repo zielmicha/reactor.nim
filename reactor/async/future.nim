@@ -320,10 +320,12 @@ proc completeError*(self: Completer, x: string) =
   self.completeError(newException(Exception, x))
 
 proc waitForever*(): Future[void] =
+  ## Returns a future that never completes.
   let completer = newCompleter[void]()
   return completer.getFuture
 
 proc waitForever*[T](t: typedesc[T]): Future[T] =
+  ## Returns a future that never completes.
   let completer = newCompleter[T]()
   return completer.getFuture
 

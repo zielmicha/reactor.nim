@@ -38,8 +38,8 @@ proc newPipe*[T](input: Input[T], output: Output[T]): Pipe[T] =
   result.output = output
 
 proc newInputOutputPair*[T](bufferSize=0): tuple[input: Input[T], output: Output[T]] =
-  ## Create a new stream/provider pair. Proving values to `provider` will make them available on `stream`.
-  ## If more than `bufferSize` items are provided without being consumed by stream, `provide` operation blocks.
+  ## Create a new stream/provider pair. Proving values to ``provider`` will make them available on ``stream``.
+  ## If more than ``bufferSize`` items are provided without being consumed by stream, ``provide`` operation blocks.
   ## If ``bufferSize == 0`` is the implementation specific default is chosen.
   new(result.input)
   result.input.queue = newQueue[T](baseBufferSizeFor(T) * 8)
@@ -78,7 +78,7 @@ proc isSendClosed*(self: Input): bool =
   self.sendClosed
 
 proc sendSome*[T](self: Output[T], data: ConstView[T]): int =
-  ## Provides some items pointed by view `data`. Returns how many items
+  ## Provides some items pointed by view ``data``. Returns how many items
   ## were actualy provided.
   self.checkProvide()
   let doPush = max(min(self.freeBufferSize, data.len), 0)
@@ -89,7 +89,7 @@ proc sendSome*[T](self: Output[T], data: ConstView[T]): int =
   return doPush
 
 proc sendAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
-  ## Provides items from `data`. Returns Future that finishes when all
+  ## Provides items from ``data``. Returns Future that finishes when all
   ## items are provided.
   when type(data) is string and not (T is byte):
     {.error: "writing strings only supported for byte streams".}
@@ -181,22 +181,22 @@ proc close*[T](self: Pipe[T], exc: ref Exception) =
   self.output.sendClose(exc)
 
 proc freeBufferSize*[T](self: Output[T]): int =
-  ## How many items can be pushed to the queue?
+  ## How many items can be pushed to the queue without blocking?
   return sself.bufferSize - sself.queue.len
 
 proc peekMany*[T](self: Input[T]): ConstView[T] =
-  ## Look at the several items from the streams.
+  ## Look at several items from the input.
   return self.queue.peekFrontMany()
 
 proc discardItems*[T](self: Input[T], count: int) =
-  ## Discard `count` items from the stream. Often used after `peekMany`.
+  ## Discard ``count`` items from the stream. Often used after ``peekMany``.
   if Output[T](self).freeBufferSize == 0 and count != 0:
     self.onSendReady.callListener()
 
   self.queue.popFront(count)
 
 proc waitForData*[T](self: Input[T], allowSpurious=false): Future[void] =
-  ## Waits until some data is available in the buffer. For use with `peekMany` and `discardItems`.
+  ## Waits until some data is available in the buffer. For use with ``peekMany`` and ``discardItems``.
   if self.queue.len != 0:
     return now(just())
 
@@ -217,7 +217,7 @@ proc waitForData*[T](self: Input[T], allowSpurious=false): Future[void] =
   return completer.getFuture
 
 proc waitForSpace*[T](self: Output[T], allowSpurious=false): Future[void] =
-  ## Waits until space is available in the buffer. For use with `sendSome` and `freeBufferSize`.
+  ## Waits until space is available in the buffer. For use with ``sendSome`` and ``freeBufferSize``.
   if self.freeBufferSize != 0:
     return now(just())
 
@@ -238,7 +238,7 @@ proc waitForSpace*[T](self: Output[T], allowSpurious=false): Future[void] =
   return completer.getFuture
 
 proc receiveSomeInto*[T](self: Input[T], target: View[T]): int =
-  ## Pops all available data into `target`, but not more that the length of `target`.
+  ## Pops all available data into ``target``, but not more that the length of ``target``.
   ## Returns the number of bytes copied to target.
   var offset = 0
   while true:
@@ -286,11 +286,11 @@ proc receiveChunk[T, Ret](self: Input[T], minn: int, maxn: int, returnType: type
   return completer.getFuture
 
 proc receiveSome*[T](self: Input[T], n: int): Future[seq[T]] =
-  ## Pops at most `n` items from the stream.
+  ## Pops at most ``n`` items from the stream.
   receiveChunk(self, 1, n, seq[T])
 
 proc receiveAll*[T](self: Input[T], n: int): Future[seq[T]] =
-  ## Pops `n` items from the stream.
+  ## Pops ``n`` items from the stream.
   receiveChunk(self, n, n, seq[T])
 
 proc receive*[T](self: Input[T]): Future[T] =
@@ -298,6 +298,9 @@ proc receive*[T](self: Input[T]): Future[T] =
   return self.receiveAll(1).then((x: seq[T]) => x[0])
 
 proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil) =
+  ## Copy data in chunks from ``self`` to ``target``. If ``function`` is provided it will be called to copy data from source to destination chunks (so custom processing can be made).
+  ##
+  ## Use this instead of ``pipe`` to reduce function call overhead for small elements.
   var targetListenerId: CallbackId
   var selfListenerId: CallbackId
 
@@ -355,34 +358,44 @@ proc flatMapperFunc[T, R](f: (proc(x: T): seq[R])): auto =
       for item in f(source[i]):
         target.add item
 
-proc pipe*[T, R](self: Input[T], target: Output[R], function: (proc(x: T): R)) =
+proc pipe*[T, R](self: Input[T], target: Output[R], function: (proc(x: T): R)): Future[void] =
+  ## Copy data from ``Input`` to ``Output`` while processing them with ``function``.
   # TODO: pipe should return Future[void]
   pipeChunks(self, target, mapperFunc(function))
 
-proc pipe*[T](self: Input[T], target: Output[T]) =
+proc pipe*[T](self: Input[T], target: Output[T]): Future[void] =
+  ## Copy data from ``Input`` to ``Output``.
   pipeChunks(self, target, nil)
 
 proc mapChunks*[T, R](self: Input[T], function: (proc(source: ConstView[T], target: var seq[R]))): Input[R] =
+  ## Map data in chunks from ``self`` and return mapped stream. ``function`` will be called to copy data from source to destination chunks (so custom processing can be made).
+  ##
+  ## Use this instead of ``map`` to function call overhead for small elements.
+
   let (rstream, rprovider) = newInputOutputPair[R]()
   pipeChunks(self, rprovider, function)
   return rstream
 
 proc flatMap*[T, R](self: Input[T], function: (proc(x: T): seq[R])): Input[R] =
+  ## Flat-map data from ``self``. Data from ``self`` will be passed to ``function`` and items returned from it will be placed it order in ``result``.
   let (rstream, rprovider) = newInputOutputPair[R]()
   pipeChunks(self, rprovider, flatMapperFunc(function))
   return rstream
 
 proc map*[T, R](self: Input[T], function: (proc(x: T): R)): Input[R] =
+  ## Map data from ``self`` placing modified data in ``result``.
   let (rstream, rprovider) = newInputOutputPair[R]()
   pipe(self, rprovider, function)
   return rstream
 
 proc map*[T, R](self: Output[T], function: (proc(x: R): T)): Output[R] =
+  ## Map data from ``result`` placing modified data in ``self``.
   let (rstream, rprovider) = newInputOutputPair[R]()
   pipe(rstream, self, function)
   return rprovider
 
 proc unwrapInputFuture*[T](f: Future[Input[T]]): Input[T] =
+  ## Wait until ``f`` completes and pipe elements from it to ``result``.
   # TODO: implement this without extra copy
   let (input, output) = newInputOutputPair()
 
@@ -392,6 +405,7 @@ proc unwrapInputFuture*[T](f: Future[Input[T]]): Input[T] =
   return input
 
 proc unwrapOutputFuture*[T](f: Future[Output[T]]): Output[T] =
+  ## Wait until ``f`` completes and pipe elements from ``result`` to it.
   let (input, output) = newInputOutputPair()
 
   f.onSuccessOrError(proc(newOutput: Output[T]) = pipe(input, newOutput),

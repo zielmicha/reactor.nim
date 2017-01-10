@@ -14,7 +14,8 @@ You can discuss reactor.nim on [Freenode #reactor.nim](https://webchat.freenode.
 
 ### Where is the documentation?
 
-It's here: https://networkos.net/nim/reactor.nim/doc/
+* [API documentation](https://networkos.net/nim/reactor.nim/doc/)
+* [Tutorial](https://networkos.net/nim/reactor.nim/tutorial.html)
 
 ### How do I report security bugs?
 

@@ -52,7 +52,7 @@ proc handleSslErr(self: TlsPipe, ret: cint) {.async.} =
 
     asyncRaise newException(TlsError, "TLS error: " & $error & " (code:" & $err & ", ret: " & $ret & ")")
 
-proc tlsReader(self: TlsPipe): ByteStream =
+proc tlsReader(self: TlsPipe): ByteInput =
   let (stream, provider) = newInputOutputPair[byte]()
 
   proc pipeRead() {.async.} =
@@ -75,7 +75,7 @@ proc doCloseSsl(self: TlsPipe) {.async.} =
   if ret <= 0:
     await self.handleSslErr(ret)
 
-proc tlsWriter(self: TlsPipe): ByteProvider =
+proc tlsWriter(self: TlsPipe): ByteOutput =
   let (input, output) = newInputOutputPair[byte]()
 
   proc pipeWrite() {.async.} =

@@ -41,9 +41,38 @@ for root, dirs, files in os.walk("doc/"):
         if path.endswith('.rst') and '#' not in path:
             subprocess.check_call(['nim', 'rst2html', path])
 
+CSS = '''
+h1.title { font-size: 36px; }
+h1 { font-size: 24px; }
+span.DecNumber { color: #252dbe; }
+span.BinNumber { color: #252dbe; }
+span.HexNumber { color: #252dbe; }
+span.OctNumber { color: #252dbe; }
+span.FloatNumber { color: #252dbe; }
+span.Identifier { color: #3b3b3b; }
+span.Keyword { font-weight: 600; color: #5e8f60; }
+span.StringLit { color: #a4255b; }
+span.LongStringLit { color: #a4255b; }
+span.CharLit { color: #a4255b; }
+span.EscapeSequence { color: black; }
+span.Operator { color: black; }
+span.Punctuation { color: black; }
+span.Comment, span.LongComment { font-style: italic; font-weight: 400; color: #484a86; }
+span.RegularExpression { color: darkviolet; }
+span.TagStart { color: darkviolet; }
+span.TagEnd { color: darkviolet; }
+span.Key { color: #252dbe; }
+span.Value { color: #252dbe; }
+span.RawData { color: #a4255b; }
+span.Assembler { color: #252dbe; }
+span.Preprocessor { color: #252dbe; }
+span.Directive { color: #252dbe; }
+span.Command, span.Rule, span.Hyperlink, span.Label, span.Reference, span.Other { color: black; }
+'''
+
 STYLE = '''
 <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel=stylesheet>
-<style type="text/css">h1.title { font-size: 36px; } h1 { font-size: 24px; }</style>
+<style type="text/css">''' + CSS + '''</style>
 '''
 
 def postprocess_html(data):
