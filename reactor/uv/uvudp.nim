@@ -33,8 +33,8 @@ proc newUdpSocket*(): UdpSocket =
   socket.handle = cast[ptr uv_udp_t](newUvHandle(UV_UDP))
   checkZero "udp_init", uv_udp_init(getThreadUvLoop(), socket.handle)
 
-  (socket.input, socket.inputProvider) = newStreamProviderPair[UdpPacket]()
-  (socket.outputStream, socket.output) = newStreamProviderPair[UdpPacket]()
+  (socket.input, socket.inputProvider) = newInputOutputPair[UdpPacket]()
+  (socket.outputStream, socket.output) = newInputOutputPair[UdpPacket]()
 
   socket.handleOutput().onErrorClose(socket.outputStream)
 

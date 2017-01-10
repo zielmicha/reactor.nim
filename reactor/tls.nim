@@ -53,7 +53,7 @@ proc handleSslErr(self: TlsPipe, ret: cint) {.async.} =
     asyncRaise newException(TlsError, "TLS error: " & $error & " (code:" & $err & ", ret: " & $ret & ")")
 
 proc tlsReader(self: TlsPipe): ByteStream =
-  let (stream, provider) = newStreamProviderPair[byte]()
+  let (stream, provider) = newInputOutputPair[byte]()
 
   proc pipeRead() {.async.} =
     var buffer = newString(4096)
@@ -76,13 +76,13 @@ proc doCloseSsl(self: TlsPipe) {.async.} =
     await self.handleSslErr(ret)
 
 proc tlsWriter(self: TlsPipe): ByteProvider =
-  let (stream, provider) = newStreamProviderPair[byte]()
+  let (input, output) = newInputOutputPair[byte]()
 
   proc pipeWrite() {.async.} =
     while true:
-      let view = stream.peekMany()
+      let view = input.peekMany()
       if view.len == 0:
-        let err = tryAwait stream.waitForData
+        let err = tryAwait input.waitForData
         if err.isError:
           await self.doCloseSsl()
           asyncRaise err.error
@@ -93,10 +93,10 @@ proc tlsWriter(self: TlsPipe): ByteProvider =
         await self.handleSslErr(ret)
       else:
         assert ret == view.len
-        stream.discardItems(view.len)
+        input.discardItems(view.len)
 
-  pipeWrite().onErrorClose(stream)
-  return provider
+  pipeWrite().onErrorClose(input)
+  return output
 
 proc wrapTls*(pipe: BytePipe): TlsPipe =
   ## Wrap raw pipe with a secure TLS connection.

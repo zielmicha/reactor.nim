@@ -1,5 +1,6 @@
 import reactor/async, reactor/tcp, reactor/safeuri, reactor/safeuri, strutils, options
 import reactor/http/httpcommon
+export httpcommon
 
 type
   HttpConnection* = ref object
@@ -103,12 +104,12 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
   return HttpResponse(statusCode: statusCode, headers: headers)
 
 proc readWithContentLength*(conn: HttpConnection, length: int64): ByteInput =
-  let (stream, provider) = newStreamProviderPair[byte]()
-  pipeLimited(conn.conn.input, provider, length).onErrorClose(provider)
-  return stream
+  let (input, output) = newInputOutputPair[byte]()
+  pipeLimited(conn.conn.input, output, length).onErrorClose(provider)
+  return input
 
 proc readChunked*(conn: HttpConnection): ByteInput =
-  let (stream, provider) = newStreamProviderPair[byte]()
+  let (input, output) = newInputOutputPair[byte]()
 
   proc piper() {.async.} =
     while true:
@@ -118,7 +119,7 @@ proc readChunked*(conn: HttpConnection): ByteInput =
 
       let length = await tryParseHexUint64(info)
       if length != 0:
-        await pipeLimited(conn.conn.input, provider, length, close=false)
+        await pipeLimited(conn.conn.input, output, length, close=false)
 
       let nl = await conn.conn.input.read(2)
       if nl != crlf:
@@ -127,10 +128,10 @@ proc readChunked*(conn: HttpConnection): ByteInput =
       if length == 0:
         break
 
-    provider.sendClose(JustClose)
+    output.sendClose(JustClose)
 
-  piper().onErrorClose(provider)
-  return stream
+  piper().onErrorClose(output)
+  return input
 
 proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpResponse] {.async.} =
   let response = await conn.readHeaders()
@@ -140,25 +141,25 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
 
   let te = response.headers.getOrDefault("transfer-encoding", "")
   if te == "chunked":
-    response.dataStream = conn.readChunked()
+    response.dataInput = conn.readChunked()
   elif te == "":
     if "content-length" notin response.headers:
       # implicit length
-      response.dataStream = conn.conn.input
+      response.dataInput = conn.conn.input
     else:
       let lengthStr = response.headers["content-length"]
       if lengthStr.len > 19:
         asyncRaise newException(HttpError, "content-length too large")
       let length = await tryParseUint64(lengthStr)
 
-      response.dataStream = conn.readWithContentLength(length)
+      response.dataInput = conn.readWithContentLength(length)
   else:
     asyncRaise newException(HttpError, "unexpected transfer-encoding")
 
   return response
 
 proc methodExpectsBody(name: string): bool =
-  return name.toUpper != "HEAD"
+  return name.toUpperAscii != "HEAD"
 
 proc request*(conn: HttpConnection, req: HttpRequest, closeConnection=false): Future[HttpResponse] {.async.} =
   await conn.sendRequest(req, closeConnection)

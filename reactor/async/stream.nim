@@ -23,13 +23,7 @@ type
 
   LengthInput*[T] = tuple[length: int64, stream: Input[T]]
 
-# old aliases
-type
-  Stream*[T] = Input[T]
-
-  Provider*[T] = Output[T]
-
-  LengthStream*[T] = LengthInput[T]
+{.deprecated: [Stream: Input, Provider: Output, LengthStream: LengthInput].}
 
 let
   JustClose* = (ref CloseException)(msg: "just close")
@@ -56,8 +50,7 @@ proc newInputOutputPair*[T](bufferSize=0): tuple[input: Input[T], output: Output
   newEvent(result.input.onRecvReady)
   newEvent(result.input.onSendReady)
 
-proc newStreamProviderPair*[T](bufferSize=0): tuple[stream: Input[T], provider: Output[T]] =
-  (result.stream, result.provider) = newInputOutputPair[T](bufferSize)
+{.deprecated: [newStreamProviderPair: newInputOutputPair].}
 
 proc `onRecvReady`*[T](self: Input[T]): auto =
   self.onRecvReady
@@ -65,23 +58,23 @@ proc `onRecvReady`*[T](self: Input[T]): auto =
 proc `onSendReady`*[T](self: Output[T]): auto =
   sself.onSendReady
 
-proc getRecvCloseException*(self: Provider): auto =
+proc getRecvCloseException*(self: Output): auto =
   assert sself.recvClosed
   sself.recvCloseException
 
-proc getSendCloseException*(self: Stream): auto =
+proc getSendCloseException*(self: Input): auto =
   assert self.sendClosed
   self.sendCloseException
 
-proc checkProvide(self: Provider) =
+proc checkProvide(self: Output) =
   if sself.sendClosed:
     # closes are broken, disable this for now
     discard #raise newException(Exception, "provide on closed stream")
 
-proc isRecvClosed*(self: Provider): bool =
+proc isRecvClosed*(self: Output): bool =
   sself.recvClosed
 
-proc isSendClosed*(self: Stream): bool =
+proc isSendClosed*(self: Input): bool =
   self.sendClosed
 
 proc provideSome*[T](self: Output[T], data: ConstView[T]): int =
@@ -169,7 +162,7 @@ proc provide*[T](self: Output[T], item: T): Future[void] =
 
 proc send*[T](self: Output[T], item: T): Future[void] = return self.send(item) # experimental alias
 
-proc sendClose*(self: Provider, exc: ref Exception) =
+proc sendClose*(self: Output, exc: ref Exception) =
   ## Closes the provider -- signals that no more items will be provided.
   if sself.sendClosed: return
   sself.sendClosed = true
@@ -370,41 +363,41 @@ proc pipe*[T](self: Input[T], target: Output[T]) =
   pipeChunks(self, target, nil)
 
 proc mapChunks*[T, R](self: Input[T], function: (proc(source: ConstView[T], target: var seq[R]))): Input[R] =
-  let (rstream, rprovider) = newStreamProviderPair[R]()
+  let (rstream, rprovider) = newInputOutputPair[R]()
   pipeChunks(self, rprovider, function)
   return rstream
 
 proc flatMap*[T, R](self: Input[T], function: (proc(x: T): seq[R])): Input[R] =
-  let (rstream, rprovider) = newStreamProviderPair[R]()
+  let (rstream, rprovider) = newInputOutputPair[R]()
   pipeChunks(self, rprovider, flatMapperFunc(function))
   return rstream
 
 proc map*[T, R](self: Input[T], function: (proc(x: T): R)): Input[R] =
-  let (rstream, rprovider) = newStreamProviderPair[R]()
+  let (rstream, rprovider) = newInputOutputPair[R]()
   pipe(self, rprovider, function)
   return rstream
 
 proc map*[T, R](self: Output[T], function: (proc(x: R): T)): Output[R] =
-  let (rstream, rprovider) = newStreamProviderPair[R]()
+  let (rstream, rprovider) = newInputOutputPair[R]()
   pipe(rstream, self, function)
   return rprovider
 
-proc unwrapStreamFuture*[T](f: Future[Input[T]]): Input[T] =
+proc unwrapInputFuture*[T](f: Future[Input[T]]): Input[T] =
   # TODO: implement this without extra copy
-  let (stream, provider) = newStreamProviderPair()
+  let (input, output) = newInputOutputPair()
 
-  f.onSuccessOrError(proc(newStream: Input[T]) = pipe(newStream, provider),
-                     proc(exception: ref Exception) = provider.sendClose(exception))
+  f.onSuccessOrError(proc(newInput: Input[T]) = pipe(newInput, output),
+                     proc(exception: ref Exception) = output.sendClose(exception))
 
-  return stream
+  return input
 
-proc unwrapProviderFuture*[T](f: Future[Output[T]]): Output[T] =
-  let (stream, provider) = newStreamProviderPair()
+proc unwrapOutputFuture*[T](f: Future[Output[T]]): Output[T] =
+  let (input, output) = newInputOutputPair()
 
-  f.onSuccessOrError(proc(newProvider: Output[T]) = pipe(stream, newProvider),
-                     proc(exception: ref Exception) = stream.sendClose(exception))
+  f.onSuccessOrError(proc(newOutput: Output[T]) = pipe(input, newOutput),
+                     proc(exception: ref Exception) = input.sendClose(exception))
 
-  return provider
+  return output
 
 proc logClose*(err: ref Exception) =
   if not (err.getOriginal of CloseException):
@@ -412,13 +405,13 @@ proc logClose*(err: ref Exception) =
 
 # errorOnClose -> onErrorClose
 
-proc onErrorClose*(f: Future[void], p: Provider) =
+proc onErrorClose*(f: Future[void], p: Output) =
   ## When future f completes with error, close provider p.
   f.onSuccessOrError(
     onSuccess=nothing1[void],
     onError=proc(t: ref Exception) = p.sendClose(t))
 
-proc onErrorClose*(f: Future[void], s: Stream) =
+proc onErrorClose*(f: Future[void], s: Input) =
   ## When future f completes with error, close stream s.
   f.onSuccessOrError(
     onSuccess=nothing1[void],

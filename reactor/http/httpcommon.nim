@@ -7,7 +7,7 @@ type
   HttpResponse* = ref object
     statusCode*: int
     headers*: HeaderTable
-    dataStream*: ByteInput
+    dataInput*: ByteInput
 
   HttpRequest* = ref object
     host*: string
@@ -24,26 +24,26 @@ converter headerTable*(arr: openarray[tuple[k: string, v: string]]): HeaderTable
   result.headers = initTable[string, string]()
   for item in arr:
     let (key, value) = item
-    result.headers[key.strip.toLower] = value.strip
+    result.headers[key.strip.toLowerAscii] = value.strip
 
 proc initHeaderTable*(): HeaderTable =
   result.headers = initTable[string, string]()
 
 proc `[]`*(self: HeaderTable, key: string): string =
-  return self.headers[key.strip.toLower]
+  return self.headers[key.strip.toLowerAscii]
 
 proc `[]=`*(self: var HeaderTable, key: string, value: string) =
-  self.headers[key.strip.toLower] = value.strip
+  self.headers[key.strip.toLowerAscii] = value.strip
 
 proc getOrDefault*(self: HeaderTable, key: string, defaultVal: string): string =
-  var key = key.strip.toLower
+  var key = key.strip.toLowerAscii
   if key notin self.headers:
     return defaultVal
   else:
     return self.headers[key]
 
 proc contains*(self: HeaderTable, key: string): bool =
-  return contains(self.headers, key.strip.toLower)
+  return contains(self.headers, key.strip.toLowerAscii)
 
 iterator pairs*(self: HeaderTable): tuple[k: string, v: string] =
   for k, v in self.headers:

@@ -96,8 +96,8 @@ proc resume*(self: UvStream) =
 
 proc newUvStream*[T](stream: ptr uv_stream_t, paused=false): T =
   let self = new(T)
-  (self.input, self.inputProvider) = newStreamProviderPair[byte]()
-  (self.outputStream, self.output) = newStreamProviderPair[byte]()
+  (self.input, self.inputProvider) = newInputOutputPair[byte]()
+  (self.outputStream, self.output) = newInputOutputPair[byte]()
 
   self.stream = stream
   self.paused = paused

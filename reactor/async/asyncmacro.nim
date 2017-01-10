@@ -146,7 +146,7 @@ macro async*(a): untyped =
   result[6] = asyncBody
 
 macro asyncFor*(iterClause: untyped, body: untyped): untyped =
-  ## An asynchronous version of `for` that works on Streams. Example:
+  ## An asynchronous version of `for` that works on Inputs. Example:
   ## ```
   ## proc simplePipe(src: Input[int], dst: Output[int]) {.async.} =
   ##   asyncFor item in src:
@@ -194,11 +194,11 @@ macro asyncIterator*(a): untyped =
     error("invalid return type from async iterator (expected Input[T])")
 
   let returnType = returnTypeFull[1]
-  let streamProviderPair = parseExpr("newStreamProviderPair[int](bufferSize=32)")
-  streamProviderPair[0][1] = returnType
+  let ioPair = parseExpr("newInputOutputPair[int](bufferSize=32)")
+  ioPair[0][1] = returnType
 
   var asyncBody = quote do:
-    let (asyncStream, asyncProvider) = `streamProviderPair`
+    let (asyncStream, asyncProvider) = `ioPair`
 
     template await(e: untyped): untyped =
       awaitInIterator(e, asyncProvider.sendClose)

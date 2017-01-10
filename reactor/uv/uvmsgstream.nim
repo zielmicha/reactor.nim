@@ -70,8 +70,8 @@ proc resume*(self: MsgPipe) =
 proc newMsgPipe*(fileno: cint): MsgPipe =
   # TODO: onClose!!!
   let self = new(MsgPipe)
-  (self.input, self.inputProvider) = newStreamProviderPair[string]()
-  (self.outputStream, self.output) = newStreamProviderPair[string]()
+  (self.input, self.inputProvider) = newInputOutputPair[string]()
+  (self.outputStream, self.output) = newInputOutputPair[string]()
 
   self.stream = cast[ptr uv_stream_t](newUvHandle(UV_TTY))
   checkZero "tty_init", uv_tty_init(getThreadUvLoop(), cast[ptr uv_tty_t](self.stream), fileno, 1.cint)

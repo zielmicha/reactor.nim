@@ -82,7 +82,7 @@ proc tcpServerClosed(server: ptr uv_stream_t) {.cdecl.} =
 
 proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
   let serverObj = new(TcpServer)
-  (serverObj.incomingConnections, serverObj.incomingConnectionsProvider) = newStreamProviderPair[TcpConnection]()
+  (serverObj.incomingConnections, serverObj.incomingConnectionsProvider) = newInputOutputPair[TcpConnection]()
 
   proc closeTcpServer(err: ref Exception) =
     uv_close(cast[ptr uv_handle_t](server), tcpServerClosed)

@@ -11,7 +11,7 @@ proc simplePipe(src: Stream[int]) {.async.} =
      echo "item ", item
    echo "here"
 
-let (s, p) = newStreamProviderPair[int]()
+let (s, p) = newInputOutputPair[int]()
 p.provideAll(@[1, 2, 3]).then(() => p.sendClose(JustClose)).ignore
 
 simplePipe(s).runLoop()

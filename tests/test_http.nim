@@ -1,5 +1,5 @@
 import reactor/loop, reactor/async, reactor/time
-import reactor/http/httpclient, reactor/http/httpcommon
+import reactor/http/httpclient
 
 let chunkedUrl = "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx"
 
@@ -15,7 +15,7 @@ proc main() {.async.} =
                    path="/", host=nil))
   let resp = await conn.readResponse(expectingBody=true)
   echo resp
-  echo (await resp.dataStream.readSome(1000))
+  echo(await resp.dataStream.readSome(1000))
   discard await resp.dataStream.readUntilEof()
   echo "ok"
 

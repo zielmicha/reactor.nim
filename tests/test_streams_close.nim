@@ -15,7 +15,7 @@ Error: reader closed [Exception]"""
 import reactor/async, reactor/loop
 
 proc test1() {.async.} =
-  let (stream, provider) = newStreamProviderPair[int]()
+  let (stream, provider) = newInputOutputPair[int]()
 
   await provider.provide(5)
   await provider.provide(6)
@@ -24,7 +24,7 @@ proc test1() {.async.} =
   (await stream.receiveAll(2)).echo
 
 proc test2() {.async.} =
-  let (stream, provider) = newStreamProviderPair[int]()
+  let (stream, provider) = newInputOutputPair[int]()
 
   await provider.provide(5)
   await provider.provide(6)
@@ -34,7 +34,7 @@ proc test2() {.async.} =
   (await stream.receiveSome(10)).echo
 
 proc test3() {.async.} =
-  let (stream, provider) = newStreamProviderPair[int]()
+  let (stream, provider) = newInputOutputPair[int]()
 
   echo "1"
   await provider.provide(1)

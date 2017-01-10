@@ -6,10 +6,7 @@ type
   ByteOutput* = Output[byte]
   LengthByteInput* = LengthInput[byte]
 
-type
-  ByteStream* = ByteInput
-  ByteProvider* = ByteOutput
-  LengthByteStream* = LengthByteInput
+{.deprecated: [ByteStream: ByteInput, ByteProvider: ByteOutput, LengthByteStream: LengthByteInput].}
 
 proc read*(self: Input[byte], count: int): Future[string] =
   ## Reads exactly `count` bytes from stream. Raises error if stream is closed before it manages to read them.
@@ -29,18 +26,18 @@ proc readChunkPrefixed*(self: Input[byte]): Future[string] {.async.} =
   asyncReturn(await self.read(length.int))
 
 proc readChunksPrefixed*(self: Input[byte]): Input[string] =
-  let (stream, provider) = newStreamProviderPair[string]()
+  let (input, output) = newInputOutputPair[string]()
 
   proc pipeChunks() {.async.} =
     while true:
       let chunk = await self.readChunkPrefixed()
-      await provider.provide(chunk)
+      await output.provide(chunk)
 
   pipeChunks().onSuccessOrError(
     onSuccess=nil,
-    onError=proc(err: ref Exception) = provider.sendClose(err))
+    onError=proc(err: ref Exception) = output.sendClose(err))
 
-  return stream
+  return input
 
 proc write*[T](self: Output[T], data: string): Future[void] =
   return self.provideAll(data)
@@ -53,7 +50,7 @@ proc writeChunkPrefixed*(self: Output[byte], item: string): Future[void] {.async
   await self.write(item)
 
 proc writeChunksPrefixed*(self: Output[byte]): Output[string] =
-  let (stream, provider) = newStreamProviderPair[string]()
+  let (stream, provider) = newInputOutputPair[string]()
 
   proc pipeChunks() {.async.} =
     while true:

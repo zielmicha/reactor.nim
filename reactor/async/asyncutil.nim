@@ -51,8 +51,8 @@ proc queueHandlerAfter(q: SerialQueue) {.async.} =
 
 proc newSerialQueue*(): SerialQueue =
   let q = new(SerialQueue)
-  (q.streamBefore, q.providerBefore) = newStreamProviderPair[SerialQueueItem]()
-  (q.streamAfter, q.providerAfter) = newStreamProviderPair[proc(): Future[void]]()
+  (q.streamBefore, q.providerBefore) = newInputOutputPair[SerialQueueItem]()
+  (q.streamAfter, q.providerAfter) = newInputOutputPair[proc(): Future[void]]()
   q.queueHandlerBefore().onErrorClose(q.streamBefore)
   q.queueHandlerAfter().onErrorClose(q.streamAfter)
   return q
@@ -110,12 +110,12 @@ proc pipeLimited*[T](self: Input[T], provider: Output[T], limit: int64, close=tr
     provider.sendClose(JustClose)
 
 proc newConstStream*[T](val: seq[T]): Input[T] =
-  let (stream, provider) = newStreamProviderPair[T]()
+  let (stream, provider) = newInputOutputPair[T]()
   provider.provideAll(val).ignore()
   return stream
 
 proc newConstStream*(val: string): Input[byte] =
-  let (stream, provider) = newStreamProviderPair[byte]()
+  let (stream, provider) = newInputOutputPair[byte]()
   provider.provideAll(val).ignore()
   return stream
 
@@ -150,7 +150,7 @@ proc splitFuture*[A, B](f: Future[tuple[a: A, b: B]]): tuple[a: Future[A], b: Fu
 
 proc unwrapPipeFuture*[T](f: Future[Pipe[T]]): Pipe[T] =
   let fs = f.map(p => (p.stream, p.provider)).splitFuture
-  return (unwrapStreamFuture(fs[0]), unwrapProviderFuture(fs[1]))
+  return (unwrapInputFuture(fs[0]), unwrapOutputFuture(fs[1]))
 
 proc pipe*[T](a: Pipe[T], b: Pipe[T]) =
   pipe(a.input, b.output)
