@@ -27,22 +27,30 @@ proc freeUv*(t: ptr) =
 proc freeUvMemory*(t: ptr uv_handle_t) {.cdecl.} =
   freeUv(t)
 
-var threadLoopId  {.threadvar.}: int
-var globalLoopId: int
+var threadLoop {.threadvar.}: ptr uv_loop_t
 
 proc init() =
+  threadLoop = uv_default_loop()
   when not defined(windows):
     signal(SIGPIPE, SIG_IGN)
 
+init()
+
+proc initThreadLoopImpl*() =
+  threadLoop = cast[ptr uv_loop_t](allocShared0(sizeof(uv_loop_t)))
+  if uv_loop_init(threadLoop) != 0:
+    raise newException(Exception, "couldn't create loop")
+
+proc destroyThreadLoopImpl*() =
+  if uv_loop_close(threadLoop) != 0:
+    raise newException(Exception, "couldn't destroy thread loop (has it processed all events?)")
+  freeShared(threadLoop)
+  threadLoop = nil
+
 proc getThreadUvLoop*(): ptr uv_loop_t =
-  # TODO: support multithreading
-  # for now, check if running on main thread
-  if globalLoopId == 0:
-    init()
-    globalLoopId = 1
-    threadLoopId = 1
-  assert threadLoopId == globalLoopId
-  return uv_default_loop()
+  if threadLoop == nil:
+    raise newException(Exception, "Thread loop is not initialized. Use initThreadLoop() and destroyThreadLoop()")
+  return threadLoop
 
 proc uvError*(code: cint|int, info: string): ref Exception =
   return newException(Exception, info & ": " & $uv_strerror(code.cint))

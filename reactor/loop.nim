@@ -17,3 +17,13 @@ proc newLoopExecutorWithArg*[T](): LoopExecutorWithArg[T] =
 
   self.executor.callback = callback
   return self
+
+proc initThreadLoop*() =
+  ## Initializes the event loop for this thread.
+  ##
+  ## Call ``destroyThreadLoop`` before returning from the thread to avoid memory leak.
+  initThreadLoopImpl()
+
+proc destroyThreadLoop*() =
+  ## Destroys the event loop for this thread.
+  destroyThreadLoopImpl()

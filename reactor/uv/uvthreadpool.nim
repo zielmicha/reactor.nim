@@ -1,4 +1,4 @@
-# this must be a separate module to avoid conflict with threadpool await
+# Implements execInPool
 from reactor/async import Completer, complete, Future, newCompleter, Result
 from threadpool import nil
 import reactor/uv/uv, reactor/uv/uvutil, reactor/util
@@ -28,12 +28,3 @@ proc execInPool*[T](function: (proc(): Result[T])): Future[T] =
 
   state.flowVar = threadpool.spawn(inPool(req, function))
   return state.completer.getFuture
-
-template maybeWrapResult(e): expr =
-  when e is Result:
-    e
-  else:
-    just(e)
-
-template spawn*(e: expr): expr =
-  execInPool(proc(): auto = maybeWrapResult(e))
