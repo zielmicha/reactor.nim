@@ -9,6 +9,8 @@ os.chdir(os.path.dirname(__file__)); os.chdir('..')
 for name in glob.glob('tests/*.nim'):
     lines = open(name).read().splitlines()
     if not (lines and lines[0].startswith('# TEST.')):
+        # not marked as test, at least compile it
+        subprocess.check_call(['nim', 'c', '--verbosity:0', name])
         continue
 
     assert lines[1].startswith('discard """')
@@ -20,8 +22,7 @@ for name in glob.glob('tests/*.nim'):
             break
 
     expected_output = '\n'.join(expected_output).encode('utf8')
-    null = open('/dev/null', 'w')
-    subprocess.check_call(['nim', 'c', '--verbosity:0', name], stderr=null)
+    subprocess.check_call(['nim', 'c', '--verbosity:0', name])
     bin_name = name.rsplit('.', 1)[0]
     got_output = subprocess.check_output([bin_name], stderr=subprocess.STDOUT).strip()
     if got_output != expected_output:

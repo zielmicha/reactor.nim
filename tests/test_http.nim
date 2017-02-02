@@ -5,7 +5,7 @@ let chunkedUrl = "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx
 
 proc main() {.async.} =
   let resp0 = await request(newHttpRequest("GET", "http://localhost").get)
-  let resp0body = (await resp0.dataStream.readUntilEof())
+  let resp0body = (await resp0.dataInput.readUntilEof())
   echo "finished: ", resp0body
 
   let conn = await newHttpConnection("127.0.0.1", port=80)
@@ -15,8 +15,8 @@ proc main() {.async.} =
                    path="/", host=nil))
   let resp = await conn.readResponse(expectingBody=true)
   echo resp
-  echo(await resp.dataStream.readSome(1000))
-  discard await resp.dataStream.readUntilEof()
+  echo(await resp.dataInput.readSome(1000))
+  discard await resp.dataInput.readUntilEof()
   echo "ok"
 
   await conn.sendRequest(

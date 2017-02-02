@@ -105,7 +105,7 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
 
 proc readWithContentLength*(conn: HttpConnection, length: int64): ByteInput =
   let (input, output) = newInputOutputPair[byte]()
-  pipeLimited(conn.conn.input, output, length).onErrorClose(provider)
+  pipeLimited(conn.conn.input, output, length).onErrorClose(output)
   return input
 
 proc readChunked*(conn: HttpConnection): ByteInput =
