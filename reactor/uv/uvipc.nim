@@ -3,13 +3,13 @@ import reactor/async, reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, rea
 export newMsgPipe, MsgPipe
 
 type
-  IpcPipe* = ref object of uvstream.UvStream
+  IpcPipe* = ref object of uvstream.UvPipe
 
 proc fromPipeFd*(fd: cint, ipc=false): IpcPipe =
   let handle = cast[ptr uv_pipe_t](newUvHandle(UV_NAMED_PIPE))
   checkZero "pipe_init", uv_pipe_init(getThreadUvLoop(), handle, if ipc: 1 else: 0)
   checkZero "pipe_open", uv_pipe_open(handle, fd)
-  return newUvInput[IpcPipe](cast[ptr uv_stream_t](handle))
+  return newUvPipe[IpcPipe](cast[ptr uv_stream_t](handle))
 
 proc fileno*(p: IpcPipe): cint =
   checkZero "fileno", uv_fileno(p.stream, addr result)
@@ -19,6 +19,6 @@ proc getPendingHandle*(p: IpcPipe, ipc=false, paused=false): Future[IpcPipe] =
   checkZero "pipe_init", uv_pipe_init(getThreadUvLoop(), handle, if ipc: 1 else: 0)
 
   if uv_accept(cast[ptr uv_handle_t](p.stream), cast[ptr uv_stream_t](handle)) == 0:
-    return newUvInput[IpcPipe](cast[ptr uv_stream_t](handle), paused=paused).immediateFuture
+    return newUvPipe[IpcPipe](cast[ptr uv_stream_t](handle), paused=paused).just.now
   else:
-    return immediateError[IpcPipe]("receive file handle")
+    return now(error(IpcPipe, "receive file handle"))
