@@ -131,9 +131,15 @@ proc onSuccessOrErrorR*(f: Result[void], onSuccess: (proc()), onError: (proc(t:r
 template catchError*(e: untyped): untyped =
   ## Converts errors from `e` into error(...) and other results into just(e)
   try:
-    just(e)
+    when type(e) is Result:
+      e
+    else:
+      just(e)
   except:
-    error(type(e), getCurrentException())
+    when type(e) is Result:
+      error(type(e.get), getCurrentException())
+    else:
+      error(type(e), getCurrentException())
 
 # Future compat
 

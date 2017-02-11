@@ -65,9 +65,10 @@ proc internalGetCompleter*[T](c: Future[T]): Completer[T] =
 
 proc destroyCompleter[T](f: Completer[T]) =
   if not f.consumed:
-    stderr.writeLine "Destroyed unconsumed future ", $f.getFuture
-    when debugFutures:
-      stderr.writeLine f.stackTrace
+    when not defined(reactorIgnoreUnconsumedFutures):
+      stderr.writeLine "Destroyed unconsumed future ", $f.getFuture
+      when debugFutures:
+        stderr.writeLine f.stackTrace
 
 proc newCompleter*[T](): Completer[T] =
   ## Creates a new completer.

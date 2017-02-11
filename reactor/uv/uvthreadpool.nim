@@ -1,5 +1,5 @@
 # Implements execInPool
-from reactor/async import Completer, complete, Future, newCompleter, Result
+from reactor/async import Completer, complete, Future, newCompleter, Result, catchError
 from threadpool import nil
 import reactor/uv/uv, reactor/uv/uvutil, reactor/util
 
@@ -15,16 +15,20 @@ proc execFinished[T](req: ptr uv_async_t) {.cdecl.} =
   req.data = nil
   uv_close(req, freeUvMemory)
 
-proc inPool[T](req: ptr uv_async_t, function: (proc(): T)): ref T =
-  result = newCopy(function())
+proc inPool[T](req: ptr uv_async_t, function: (proc(): Result[T])): ref Result[T] =
+  let res: Result[T] = catchError(function())
+  result = newCopy(res)
   checkZero "async_send", uv_async_send(req)
 
 proc execInPool*[T](function: (proc(): Result[T])): Future[T] =
-  let state = ExecState[T](completer: newCompleter[T]())
-  let req = cast[ptr uv_async_t](newUvHandle(UV_ASYNC))
-  GC_ref(state)
-  checkZero "async_init", uv_async_init(getThreadUvLoop(), req, execFinished[T])
-  req.data = cast[pointer](state)
+  when defined(reactorDisableThreadPool):
+    return now(function())
+  else:
+    let state = ExecState[T](completer: newCompleter[T]())
+    let req = cast[ptr uv_async_t](newUvHandle(UV_ASYNC))
+    GC_ref(state)
+    checkZero "async_init", uv_async_init(getThreadUvLoop(), req, execFinished[T])
+    req.data = cast[pointer](state)
 
-  state.flowVar = threadpool.spawn(inPool(req, function))
-  return state.completer.getFuture
+    state.flowVar = threadpool.spawn(inPool(req, function))
+    return state.completer.getFuture

@@ -99,9 +99,13 @@ proc forEach*[T](self: Input[T], function: (proc(x: T))): Future[void] {.async.}
     function(item)
 
 proc pipeLimited*[T](self: Input[T], provider: Output[T], limit: int64, close=true): Future[void] {.async.} =
+  # FIXME: close on error?
   var limit = limit
   while limit > 0:
-    let data = await self.receiveSome(min(limit, (baseBufferSizeFor(T) * 8).int64).int)
+    let res = tryAwait self.receiveSome(min(limit, (baseBufferSizeFor(T) * 8).int64).int)
+    if not res.isSuccess and res.error.getOriginal of CloseException:
+      break # TODO: is this right?
+    let data = await res
     limit -= data.len
     assert limit >= 0
     await provider.sendAll(data)
@@ -109,21 +113,26 @@ proc pipeLimited*[T](self: Input[T], provider: Output[T], limit: int64, close=tr
   if close:
     provider.sendClose(JustClose)
 
-proc newConstStream*[T](val: seq[T]): Input[T] =
+proc newConstInput*[T](val: seq[T]): Input[T] =
   let (stream, provider) = newInputOutputPair[T]()
   provider.sendAll(val).ignore()
   return stream
 
-proc newConstStream*(val: string): Input[byte] =
+proc newConstInput*(val: string): Input[byte] =
   let (stream, provider) = newInputOutputPair[byte]()
   provider.sendAll(val).ignore()
   return stream
 
-proc newLengthStream*[T](data: seq[T]): LengthInput[T] =
-  (data.len.int64, newConstStream(data))
+proc newLengthInput*[T](data: seq[T]): LengthInput[T] =
+  (data.len.int64, newConstInput(data))
 
-proc newLengthStream*(data: string): LengthInput[byte] =
-  (data.len.int64, newConstStream(data))
+proc newLengthInput*(data: string): LengthInput[byte] =
+  (data.len.int64, newConstInput(data))
+
+proc nullOutput*[T](t: typedesc[T]): Output[T] =
+  let (input, output) = newInputOutputPair[byte]()
+  input.forEachChunk(proc(x: seq[T]) = discard).onErrorClose(input)
+  return output
 
 proc zip*[A](a: seq[Future[A]]): Future[seq[A]] {.async.} =
   var res: seq[A] = @[]
