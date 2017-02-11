@@ -342,6 +342,7 @@ proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source
 
   targetListenerId = target.onSendReady.addListener(pipeSome)
   selfListenerId = self.onRecvReady.addListener(pipeSome)
+  pipeSome()
 
 proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
   return proc(source: ConstView[T], target: var seq[R]) =
