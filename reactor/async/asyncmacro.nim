@@ -106,6 +106,8 @@ macro async*(a): untyped =
   let completer = parseExpr("newCompleter[int]()")
   completer[0][1] = returnType
 
+  let innerIteratorName = genSym(kind=nskIterator, ident= $procNameStripped)
+
   var asyncBody = quote do:
     let asyncProcCompleter = `completer`
 
@@ -124,14 +126,14 @@ macro async*(a): untyped =
         asyncProcCompleter.complete(e)
         return
 
-    iterator `procNameStripped`(): AsyncIterator {.closure.} =
+    iterator `innerIteratorName`(): AsyncIterator {.closure.} =
       `body`
       when `returnType` is void:
         asyncProcCompleter.complete()
       else:
         asyncProcCompleter.completeError("missing asyncReturn")
 
-    let iter: (iterator(): AsyncIterator) = `procNameStripped`
+    let iter: (iterator(): AsyncIterator) = `innerIteratorName`
 
     asyncIteratorRun(iter)
     return asyncProcCompleter.getFuture

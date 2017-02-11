@@ -23,8 +23,6 @@ type
 
   LengthInput*[T] = tuple[length: int64, stream: Input[T]]
 
-{.deprecated: [Stream: Input, Provider: Output, LengthStream: LengthInput].}
-
 let
   JustClose* = (ref CloseException)(msg: "just close")
 

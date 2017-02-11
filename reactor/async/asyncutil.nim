@@ -131,10 +131,9 @@ proc zip*[A](a: seq[Future[A]]): Future[seq[A]] {.async.} =
     res.add(tryAwait item)
   return res
 
-# TODO: breaks on Nim 0.16.0
-# proc zip*(a: seq[Future[void]]): Future[void] {.async.} =
-#   for item in a:
-#     await item
+proc zip*(a: seq[Future[void]]): Future[void] {.async.} =
+  for item in a:
+    await item
 
 proc splitFuture*[A, B](f: Future[tuple[a: A, b: B]]): tuple[a: Future[A], b: Future[B]] =
   ## Converts a future of tuple to tuple of futures.
