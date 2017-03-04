@@ -15,6 +15,7 @@
 * httpclient connection pool support
 * stdlib asyncdispatch compat
 * Redis: autoreconnect
+* process - PIPE
 
 ### TODO (asyncmacro)
 * `yield` to `asyncYield`

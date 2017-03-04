@@ -1,4 +1,4 @@
-# TEST.
+# disabled TEST. (Nim #5481)
 discard """@[5, 6]
 @[5]
 @[6]
