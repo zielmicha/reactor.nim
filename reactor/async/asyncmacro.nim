@@ -157,7 +157,15 @@ macro async*(a): untyped =
     asyncIteratorRun(iter)
     return asyncProcCompleter.getFuture
 
-  result = newProc(procName)
+  result = newNimNode(nnkProcDef, a).add(
+    procName,
+    newEmptyNode(),
+    newEmptyNode(),
+    newEmptyNode(),
+    newEmptyNode(),
+    newEmptyNode(),
+    newEmptyNode())
+
   result[2] = a[2]
   result[3] = newNimNode(nnkFormalParams)
   result[3].add returnTypeNew

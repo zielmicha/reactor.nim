@@ -12,6 +12,9 @@ type
     sendCloseException: ref Exception
     recvCloseException: ref Exception
 
+    when not defined(release):
+      marker: uint32 # has to be 0xDEADBEEF
+
   Output* {.borrow: `.`.}[T]  = distinct Input[T]
 
   Pipe*[T] = ref object {.inheritable.}
@@ -30,6 +33,16 @@ proc getInput[T](s: Output[T]): Input[T] {.inline.} = Input[T](s)
 
 template sself = self.getInput
 
+proc `$`*[T](input: Input[T]): string =
+  when not defined(release):
+    assert input.marker == 0xDEADBEEF'u32
+  return "Input[$1](...)" % name(T)
+
+proc `$`*[T](output: Output[T]): string =
+  when not defined(release):
+    assert output.getInput.marker == 0xDEADBEEF'u32
+  return "Output[$1](...)" % name(T)
+
 proc newPipe*[T](input: Input[T], output: Output[T]): Pipe[T] =
   new(result)
   result.input = input
@@ -40,6 +53,8 @@ proc newInputOutputPair*[T](bufferSize=0): tuple[input: Input[T], output: Output
   ## If more than ``bufferSize`` items are provided without being consumed by stream, ``provide`` operation blocks.
   ## If ``bufferSize == 0`` is the implementation specific default is chosen.
   new(result.input)
+  when not defined(release):
+    result.input.marker = 0xDEADBEEF'u32
   result.input.queue = newQueue[T](baseBufferSizeFor(T) * 8)
 
   result.input.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 32) else: bufferSize
@@ -402,6 +417,7 @@ proc pipe*[T](self: Input[T], target: Output[T]): Future[void] =
   ## Copy data from ``Input`` to ``Output``.
   ##
   ## Returned future completes successfuly when there is no more data to copy. If any errros occurs the future completes with error.
+  when not defined(release): assert self.marker == 0xDEADBEEF'u32
   pipeChunks(self, target, nil)
 
 proc mapChunks*[T, R](self: Input[T], function: (proc(source: ConstView[T], target: var seq[R]))): Input[R] =
