@@ -4,64 +4,65 @@ import reactor/async, reactor/tcp, reactor/time
 type
   RedisError* = object of Exception
 
-proc readError(stream: ByteStream): Future[ref RedisError] {.async.} =
-  let excString = (await stream.readLine()).strip()
+proc readError(input: ByteInput): Future[ref RedisError] {.async.} =
+  let excString = (await input.readLine()).strip()
   return newException(RedisError, excString)
 
-proc readInt(stream: ByteStream): Future[int64] {.async.} =
-  let s = (await stream.readLine()).strip()
+proc readInt(input: ByteInput): Future[int64] {.async.} =
+  let s = (await input.readLine()).strip()
   if s.len == 0:
     asyncRaise newException(RedisError, "EOF")
   return parseBiggestInt(s)
 
-proc unserialize*(stream: ByteStream, typ: typedesc[string]): Future[string] {.async.} =
-  let ch = (await stream.read(1))
+proc unserialize*(input: ByteInput, typ: typedesc[string]): Future[string] {.async.} =
+  let ch = (await input.read(1))
   if ch == "-":
-    asyncRaise (await stream.readError())
+    let err = await input.readError()
+    asyncRaise err
   elif ch == "+":
-    let line = await stream.readLine()
+    let line = await input.readLine()
     if line.len < 2:
       asyncRaise newException(RedisError, "protocol error")
     return line[0..<line.len - 2]
   elif ch == "$":
-    let len = (await stream.readInt())
+    let len = (await input.readInt())
     if len == -1:
       return nil
-    let body = await stream.read(len.int)
-    if (await stream.read(2)) != "\r\L":
+    let body = await input.read(len.int)
+    if (await input.read(2)) != "\r\L":
       asyncRaise newException(RedisError, "protocol error")
     return body
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
-proc unserialize*(stream: ByteStream, typ: typedesc[int64]): Future[int64] {.async.} =
-  let ch = (await stream.read(1))
+proc unserialize*(input: ByteInput, typ: typedesc[int64]): Future[int64] {.async.} =
+  let ch = (await input.read(1))
   if ch == "-":
-    asyncRaise (await stream.readError())
+    asyncRaise (await input.readError())
   elif ch == ":":
-    return (await stream.readInt())
+    return (await input.readInt())
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
-proc unserialize*(stream: ByteStream, typ: typedesc[void]): Future[void] {.async.} =
-  discard (await unserialize(stream, string))
+proc unserialize*(input: ByteInput, typ: typedesc[void]): Future[void] {.async.} =
+  discard (await unserialize(input, string))
 
-proc unserialize*[T](stream: ByteStream, typ: typedesc[seq[T]]): Future[seq[T]] {.async.} =
-  let ch = (await stream.read(1))
+proc unserialize*[T](input: ByteInput, typ: typedesc[seq[T]]): Future[seq[T]] {.async.} =
+  let ch = (await input.read(1))
   if ch == "-":
-    asyncRaise (await stream.readError())
+    asyncRaise (await input.readError())
   elif ch == "*":
-    let len = (await stream.readInt())
+    let len = (await input.readInt())
     if len == -1:
       return nil
     var resp: seq[T] = @[]
     for i in 0..<(len.int):
-      resp.add(await unserialize(stream, T))
+      resp.add(await unserialize(input, T))
     return resp
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
-proc serialize*[T](output: ByteProvider, val: seq[T]): Future[void] {.async.} =
+proc serialize*[T](output: ByteOutput, val: seq[T]): Future[void] {.async.} =
   if val == nil:
     await output.write("*-1\r\n")
   else:
@@ -69,10 +70,10 @@ proc serialize*[T](output: ByteProvider, val: seq[T]): Future[void] {.async.} =
     for item in val:
       await output.serialize(item)
 
-proc serialize*(output: ByteProvider, val: int64): Future[void] {.async.} =
+proc serialize*(output: ByteOutput, val: int64): Future[void] {.async.} =
   await output.write(":" & ($val) & "\r\n")
 
-proc serialize*(output: ByteProvider, val: string): Future[void] {.async.} =
+proc serialize*(output: ByteOutput, val: string): Future[void] {.async.} =
   if val == nil:
     await output.write("$-1\r\n")
   await output.write("$" & ($val.len) & "\r\n")
@@ -183,16 +184,16 @@ type
     channel*: string
     message*: string
 
-proc expectSubscribeConfirmation(stream: ByteStream) {.async.} =
-  let ch = (await stream.read(1))
+proc expectSubscribeConfirmation(input: ByteInput) {.async.} =
+  let ch = (await input.read(1))
   if ch == "*":
-    let len = (await stream.readInt())
+    let len = (await input.readInt())
     if len != 3:
       asyncRaise newException(RedisError, "unexpected array length")
-    if (await unserialize(stream, string)) != "subscribe":
+    if (await unserialize(input, string)) != "subscribe":
       asyncRaise newException(RedisError, "unexpected event")
-    discard (await unserialize(stream, string))
-    discard (await unserialize(stream, int))
+    discard (await unserialize(input, string))
+    discard (await unserialize(input, int64))
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
@@ -202,7 +203,7 @@ proc pubsubStart(client: RedisClient, channels: seq[string]) {.async.} =
   for ch in channels:
     await client.pipe.input.expectSubscribeConfirmation()
 
-proc pubsub*(client: RedisClient, channels: seq[string]): Stream[RedisMessage] {.asynciterator.} =
+proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage] {.asynciterator.} =
   ## Start listening for PUBSUB messages on channels `channels`.
   var reconnect = false
   while true:
