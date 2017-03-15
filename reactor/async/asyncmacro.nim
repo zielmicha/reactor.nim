@@ -17,6 +17,7 @@ template stopAsync*(): typed =
 
 template awaitInIterator*(body: typed, errorFunc: untyped): untyped =
   let fut = body
+
   when fut is Future:
     assert fut.isImmediate or fut.completer != nil, "nil passed to await"
     if not fut.isCompleted:
@@ -53,12 +54,13 @@ proc asyncIteratorRun*(it: (iterator(): AsyncIterator)) =
   var asyncIter = it()
   if finished(it):
     return
+
   if asyncIter.callback != nil:
     asyncIter.callback(proc() = asyncIteratorRun(it))
 
 proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
   if n.kind in RoutineNodes:
-    return n
+    return n.copyNimTree
 
   if n.kind == nnkReturnStmt:
     if n[0].kind == nnkEmpty:
@@ -66,7 +68,7 @@ proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
     else:
       return newCall(newIdentNode(!"asyncReturn"), n[0])
 
-  let node = n.copyNimTree
+  let node = n.copyNimNode
   for i in 0..<node.len:
     node[i] = transformAsyncBody(n[i])
   return node
@@ -79,6 +81,11 @@ macro async*(a): untyped =
   ## proc add5(s: Future[int]): Future[int] {.async.} =
   ##   asyncReturn((await s) + 5)
   ## ```
+
+  # How do async function work?
+  #
+  # async function is really an iterator object (suspendable function).
+  # Each blocking ``await`` is turned into ``yield`` that returns ``AsyncIterator`` object.
 
   var a = a
   if a.kind == nnkStmtList:
@@ -113,6 +120,7 @@ macro async*(a): untyped =
 
     template await(e: typed): untyped =
       awaitInIterator(e, asyncProcCompleter.completeError)
+
     template asyncRaise(e: typed) =
       asyncProcCompleter.completeError(attachInstInfo(e, extInstantiationInfo()))
       return
@@ -138,7 +146,11 @@ macro async*(a): untyped =
     asyncIteratorRun(iter)
     return asyncProcCompleter.getFuture
 
-  result = newProc(procName)
+  result = newNimNode(nnkProcDef, a).add(
+    newEmptyNode(), newEmptyNode(), newEmptyNode(),
+    newNimNode(nnkFormalParams).add(params),
+    newEmptyNode(), newEmptyNode(), newEmptyNode())
+  result[0] = procName
   result[2] = a[2]
   result[3] = newNimNode(nnkFormalParams)
   result[3].add returnTypeNew
