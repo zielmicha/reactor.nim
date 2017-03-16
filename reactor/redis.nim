@@ -83,13 +83,13 @@ proc serialize*(output: ByteOutput, val: string): Future[void] {.async.} =
 type
   RedisClient* = ref object
     pipe*: BytePipe
-    pipelineQueue: SerialQueue
+    sendMutex: AsyncMutex
     connectProc: (proc(client: RedisClient): Future[void])
     reconnectFlag: bool
 
 proc wrapRedis*(connectProc: (proc(client: RedisClient): Future[void]), reconnect=false): RedisClient =
   ## Create Redis client from existing connection. connectProc should assign connection to `pipe` attribute of `client`.
-  RedisClient(pipelineQueue: newSerialQueue(), connectProc: connectProc, reconnectFlag: reconnect)
+  RedisClient(sendMutex: newAsyncMutex(), connectProc: connectProc, reconnectFlag: reconnect)
 
 proc reconnect*(client: RedisClient) {.async.} =
   if not client.reconnectFlag and client.pipe != nil:
@@ -113,13 +113,11 @@ proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[
     await client.reconnect()
 
   var resp: Future[R]
-  when defined(enableRedisPipelining):
-    let unserializeFunc = (proc(): Future[R] = unserialize(client.pipe.input, R))
-    let serializeFunc = (proc(): Future[void] = client.pipe.output.serialize(cmd))
-    resp = (client.pipelineQueue.enqueue(serializeFunc, unserializeFunc))
-  else:
-    await client.pipe.output.serialize(cmd)
-    resp = unserialize(client.pipe.input, R)
+
+  await client.sendMutex.lock
+  await client.pipe.output.serialize(cmd)
+  resp = unserialize(client.pipe.input, R)
+  client.sendMutex.unlock # if these previous calls throw, left mutex locked
 
   when R is void:
     await resp
@@ -132,8 +130,8 @@ proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[
   when R is not void:
     return val
 
-macro defCommand*(sname: untyped, args: untyped, rettype: untyped): stmt =
-  let name = newIdentNode(sname.strVal.toLower)
+macro defCommand*(sname: untyped, args: untyped, rettype: untyped): untyped =
+  let name = newIdentNode(sname.strVal.toLowerAscii)
   let defArgs = newNimNode(nnkFormalParams).add(newNimNode(nnkEmpty))
   defArgs.add(newNimNode(nnkIdentDefs).add(newIdentNode("client"), newIdentNode("RedisClient"), newNimNode(nnkEmpty)))
 
