@@ -16,6 +16,7 @@ include reactor/async/stream
 include reactor/async/asyncmacro
 include reactor/async/bytes
 include reactor/async/asyncutil
+include reactor/async/asyncmutex
 
 export views
 
