@@ -1,4 +1,4 @@
-import reactor/uv/uv, reactor/ipaddress, reactor/ipaddress
+import reactor/uv/uv, reactor/ipaddress, reactor/ipaddress, reactor/uv/uvsizeof
 import os
 
 type UVError* = object of Exception
@@ -37,16 +37,17 @@ proc init() =
 when not defined(enableMtcp):
   init()
 
-proc uv_loop_init_mtcp(loop: ptr uv_loop_t, core: cint): cint {.importc.}
-
 when defined(enableMtcp):
+  proc uv_loop_init_mtcp(loop: ptr uv_loop_t, core: cint): cint {.importc.}
+
   proc initThreadLoopMtcpImpl*(core: int) =
-    threadLoop = cast[ptr uv_loop_t](allocShared0(sizeof(uv_loop_t)))
+    threadLoop = cast[ptr uv_loop_t](allocShared0(sizeofLoop()))
     if uv_loop_init_mtcp(threadLoop, core.cint) != 0:
       raise newException(Exception, "couldn't create MTCP loop")
 
 proc initThreadLoopImpl*() =
-  threadLoop = cast[ptr uv_loop_t](allocShared0(sizeof(uv_loop_t)))
+  assert threadLoop == nil
+  threadLoop = cast[ptr uv_loop_t](allocShared0(sizeofLoop()))
   if uv_loop_init(threadLoop) != 0:
     raise newException(Exception, "couldn't create loop")
 

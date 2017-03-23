@@ -1,8 +1,9 @@
 import reactor/async
 import reactor/uv/uvthreadpool
-import reactor/uv/uvthreads
+import reactor/uv/uvmultithread
 
 export execInPool
+export uvmultithread
 
 template maybeWrapResult(e): expr =
   when e is Result:
