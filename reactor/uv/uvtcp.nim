@@ -21,13 +21,13 @@ type
 
   TcpConnectionData* = object
     host*: IpAddress
-    # IP address
+    ## IP address
 
     port*: int
-    # TCP port
+    ## TCP port
 
     boundSocket*: TcpBoundSocket
-    # if not nil, use pre-existing bound TCP socket
+    ## if not nil, use pre-existing bound TCP socket
 
   TcpBoundSocket* = ref object
     stream: ptr uv_tcp_t
@@ -69,7 +69,7 @@ proc onNewConnection(server: ptr uv_stream_t; status: cint) {.cdecl.} =
 
   var conn = newTcpConnection(client)
 
-  let provided = serverObj.incomingConnectionsProvider.provideSome(singleItemView(conn))
+  let provided = serverObj.incomingConnectionsProvider.sendSome(singleItemView(conn))
   if provided == 0:
     stderr.writeLine "Warning: dropped incoming TCP connection"
     # FIXME: don't accept connection if there is no space in the queue
@@ -95,7 +95,7 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
 
   return serverObj
 
-proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
+proc createTcpServer*(port: int, host="localhost", reusePort=false): Future[TcpServer] =
   ## Create TcpServer listening on `host`:`port`.
   ##
   ## Example:
@@ -112,7 +112,9 @@ proc createTcpServer*(port: int, host="localhost"): Future[TcpServer] =
     for address in addresses:
       var sockaddress: SockAddr
       ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress), address, port)
-      let bindErr = uv_tcp_bind(server, cast[ptr SockAddr](addr sockaddress), 0)
+      let flags = if reusePort: cuint(UV_TCP_REUSEPORT)
+                  else: cuint(0)
+      let bindErr = uv_tcp_bind(server, cast[ptr SockAddr](addr sockaddress), flags)
       if bindErr == UV_ENOPROTOOPT: # FIXME: windows
         continue
       if bindErr < 0:

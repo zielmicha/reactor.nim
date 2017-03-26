@@ -1,11 +1,11 @@
 import reactor, reactor/threading, os
 
-let mloop = newMultiLoop(threadCount=16, pin=false)
-echo "count:", mloop.threadCount
+startMultiloop(threadCount=16, pin=false)
+echo "count:", threadLoopCount()
 
-mloop.execOnThread(0, proc() = echo threadLoopId(), ": hello from zero")
-mloop.execOnAllThreads(proc() = echo threadLoopId(), ": hello")
-mloop.execOnAllThreads(proc() = echo threadLoopId(), ": world")
+runOnThread(0, proc() = echo threadLoopId(), ": hello from zero")
+runOnAllThreads(proc() = echo threadLoopId(), ": hello")
+runOnAllThreads(proc() = echo threadLoopId(), ": world")
 os.sleep(1000)
-mloop.execOnAllThreads(proc() = echo threadLoopId(), ": bum")
+runOnAllThreads(proc() = echo threadLoopId(), ": bum")
 os.sleep(1000)

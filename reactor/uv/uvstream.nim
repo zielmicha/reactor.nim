@@ -31,8 +31,8 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
       self.inputOther.sendClose(uvError(nread, "read stream"))
   else:
     assert nread <= buf.len
-    let provided = self.inputOther.provideSome(ByteView(data: buf.base, size: nread))
-    assert provided == nread
+    let sent = self.inputOther.sendSome(ByteView(data: buf.base, size: nread))
+    assert sent == nread
 
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
   # TODO: avoid copy (directly point to the queue buffer)
