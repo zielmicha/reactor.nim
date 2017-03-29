@@ -48,7 +48,13 @@ proc write*(self: Output[byte], data: string): Future[void] =
 
 proc writeItem*[T](self: Output[byte], item: T, endian: Endianness): Future[void] =
   ## Write value of type T with specified endanness. (T should be scalar type like int32)
-  return self.write(pack(item, endian))
+  if endian == cpuEndian and self.freeBufferSize >= sizeof(T):
+    # fast path
+    let s = self.sendSome(ByteView(data: unsafeAddr item, size: sizeof(T)))
+    assert s == sizeof(T)
+    return now(just())
+  else:
+    return self.write(pack(item, endian))
 
 proc writeChunkPrefixed*(self: Output[byte], item: string, sizeEndian=bigEndian): Future[void] {.async.} =
   ## Write chunk prefixed by 4-byte length.

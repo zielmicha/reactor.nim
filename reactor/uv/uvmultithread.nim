@@ -43,8 +43,11 @@ proc loopMain(state: ptr ThreadState) {.thread.} =
 
 proc runOnThread*(threadId: int, function: (proc() {.gcsafe.})) =
   ## Execute ``function`` on thread ``threadId``. This function returns immediatly.
-  mloop.state[threadId].channel.send(ThreadFunc(function: function))
-  checkZero "async_send", uv_async_send(mloop.state[threadId].channelReady)
+  if currentThreadState != nil and threadId == threadLoopId():
+    function()
+  else:
+    mloop.state[threadId].channel.send(ThreadFunc(function: function))
+    checkZero "async_send", uv_async_send(mloop.state[threadId].channelReady)
 
 proc runOnAllThreads*(function: (proc() {.gcsafe.})) =
   for i in 0..<threadLoopCount():
