@@ -15,7 +15,11 @@ template stopAsync*(): typed =
   # we will never be called again
   yield AsyncIterator(callback: nil)
 
-template awaitInIterator*(body: typed, errorFunc: untyped): untyped =
+proc callDefers(defers: var seq[proc()]) =
+  for i in 0..<defers.len:
+    defers[defers.len - i - 1]()
+
+template awaitInIterator*(body: typed, errorFunc: untyped, defers: typed): untyped =
   let fut = body
   when fut is Future:
     assert fut.isImmediate or fut.completer != nil, "nil passed to await"
@@ -26,6 +30,7 @@ template awaitInIterator*(body: typed, errorFunc: untyped): untyped =
 
   if not fut.isSuccess:
     let err = attachInstInfo(fut.getResult.error, extInstantiationInfo(-2))
+    callDefers(defers)
     errorFunc(err)
     stopAsync()
 
@@ -65,6 +70,10 @@ proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
       return newCall(newIdentNode(!"asyncReturn"))
     else:
       return newCall(newIdentNode(!"asyncReturn"), n[0])
+
+  if n.kind == nnkDefer:
+    # normal defer appears to work, but is called when iterator yields, not when it exits!
+    return newCall(newIdentNode(!"asyncDefer"), n[0])
 
   let node = n.copyNimTree
   for i in 0..<node.len:
@@ -110,24 +119,34 @@ macro async*(a): untyped =
 
   var asyncBody = quote do:
     let asyncProcCompleter = `completer`
+    var defers: seq[proc()]
 
     template await(e: typed): untyped =
-      awaitInIterator(e, asyncProcCompleter.completeError)
+      awaitInIterator(e, asyncProcCompleter.completeError, defers)
+
     template asyncRaise(e: typed) =
+      callDefers(defers)
       asyncProcCompleter.completeError(attachInstInfo(e, extInstantiationInfo()))
       return
 
+    template asyncDefer(e: typed) =
+      if defers == nil: defers = @[]
+      defers.add(proc() = e)
+
     when asyncProcCompleter is Completer[void]:
       template asyncReturn() =
+        callDefers(defers)
         asyncProcCompleter.complete()
         return
     else:
       template asyncReturn(e: typed) =
+        callDefers(defers)
         asyncProcCompleter.complete(e)
         return
 
     iterator `innerIteratorName`(): AsyncIterator {.closure.} =
       `body`
+      callDefers(defers)
       when `returnType` is void:
         asyncProcCompleter.complete()
       else:
@@ -201,17 +220,23 @@ macro asyncIterator*(a): untyped =
 
   var asyncBody = quote do:
     let (asyncStream, asyncProvider) = `ioPair`
+    var defers: seq[proc()]
 
     template await(e: untyped): untyped =
-      awaitInIterator(e, asyncProvider.sendClose)
+      awaitInIterator(e, asyncProvider.sendClose, defers)
 
     template asyncRaise(e: untyped): untyped =
+      callDefers(defers)
       asyncProvider.sendClose(attachInstInfo(e, extInstantiationInfo()))
       return
 
     template asyncYield(e: untyped): untyped =
       mixin await
       await asyncProvider.send(e)
+
+    template asyncDefer(e: typed) =
+      if defers == nil: defers = @[]
+      defers.add(proc() = e)
 
     let iter = iterator(): AsyncIterator {.closure.} =
       `body`
