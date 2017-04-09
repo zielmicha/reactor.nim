@@ -115,9 +115,9 @@ proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[
   var resp: Future[R]
 
   await client.sendMutex.lock
+  asyncDefer: client.sendMutex.unlock # correct?
   await client.pipe.output.serialize(cmd)
   resp = unserialize(client.pipe.input, R)
-  client.sendMutex.unlock # if these previous calls throw, left mutex locked
 
   when R is void:
     await resp
