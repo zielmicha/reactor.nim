@@ -95,6 +95,33 @@ proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
 
   return serverObj
 
+
+proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Future[TcpServer] =
+  let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
+  checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), server)
+
+  for address in addresses:
+    var sockaddress: SockAddr
+    ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress), address, port)
+    let flags = if reusePort: cuint(UV_TCP_REUSEPORT)
+                else: cuint(0)
+    let bindErr = uv_tcp_bind(server, cast[ptr SockAddr](addr sockaddress), flags)
+    if bindErr == UV_ENOPROTOOPT: # FIXME: windows
+      continue
+    if bindErr < 0:
+      return now(error(TcpServer, uvError(bindErr, "bind [" & $address & "]:" & $port)))
+    else:
+      break
+
+  let serverObj = newTcpServer(server)
+  serverObj.sockAddr = getSockAddr(server) # for getSockAddr
+
+  let listenErr = uv_listen(cast[ptr uv_stream_t](server), 5, onNewConnection)
+  if listenErr < 0:
+    return now(error(TcpServer, uvError(listenErr, "listen")))
+
+  return now(just(serverObj))
+
 proc createTcpServer*(port: int, host="localhost", reusePort=false): Future[TcpServer] =
   ## Create TcpServer listening on `host`:`port`.
   ##
@@ -105,33 +132,7 @@ proc createTcpServer*(port: int, host="localhost", reusePort=false): Future[TcpS
   ##   asyncFor conn in server.incomingConnections:
   ##     # handle incoming connection
   ##     await conn.output.write("hello")
-  let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
-  checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), server)
-
-  proc resolved(addresses: seq[IpAddress]): Future[TcpServer] =
-    for address in addresses:
-      var sockaddress: SockAddr
-      ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress), address, port)
-      let flags = if reusePort: cuint(UV_TCP_REUSEPORT)
-                  else: cuint(0)
-      let bindErr = uv_tcp_bind(server, cast[ptr SockAddr](addr sockaddress), flags)
-      if bindErr == UV_ENOPROTOOPT: # FIXME: windows
-        continue
-      if bindErr < 0:
-        return now(error(TcpServer, uvError(bindErr, "bind [" & $address & "]:" & $port)))
-      else:
-        break
-
-    let serverObj = newTcpServer(server)
-    serverObj.sockAddr = getSockAddr(server) # for getSockAddr
-
-    let listenErr = uv_listen(cast[ptr uv_stream_t](server), 5, onNewConnection)
-    if listenErr < 0:
-      return now(error(TcpServer, uvError(listenErr, "listen")))
-
-    return now(just(serverObj))
-
-  return resolveAddress(host).then(resolved)
+  return resolveAddress(host).then(addresses => createTcpServer(port, addresses, reusePort))
 
 proc bindSocketForConnect*(bindHost: IpAddress, bindPort: int): Future[TcpBoundSocket] =
   let handle = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
