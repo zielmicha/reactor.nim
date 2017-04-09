@@ -18,7 +18,14 @@ proc readSome*(self: Input[byte], maxCount: int): Future[string] =
 
 proc readItem*[T](self: Input[byte], `type`: typedesc[T], endian: Endianness): Future[T] =
   ## Read value of type T with specified endanness. (T should be scalar type like int32)
-  return self.read(sizeof(T)).then(proc(x: string): T = unpack(x, T, endian))
+  if endian == cpuEndian and self.dataAvailable >= sizeof(T):
+    # fast path
+    var item: T
+    let s = self.receiveSomeInto(ByteView(data: unsafeAddr item, size: sizeof(T)))
+    assert s == sizeof(T)
+    return now(just(item))
+  else:
+    return self.read(sizeof(T)).then(proc(x: string): T = unpack(x, T, endian))
 
 proc readChunkPrefixed*(self: Input[byte], sizeEndian=bigEndian): Future[string] {.async.} =
   ## Read chunk of text prefixed by 4 byte length

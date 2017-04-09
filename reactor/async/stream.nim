@@ -86,6 +86,29 @@ proc sendSome*[T](self: Output[T], data: ConstView[T]): int =
   sself.queue.pushBackMany(data.slice(0, doPush))
   return doPush
 
+proc sendAllSlow[T](self: Output[T], data: seq[T]|string,
+                    dataView: View[T], offset: int): Future[void] =
+  let completer = newCompleter[void]()
+  var offset = offset
+  var sendListenerId: CallbackId
+
+  sendListenerId = self.onSendReady.addListener(proc() =
+    if sself.sendClosed:
+      completer.completeError("send side closed")
+      self.onSendReady.removeListener sendListenerId
+      return
+    if sself.recvClosed:
+      completer.completeError(sself.recvCloseException)
+      self.onSendReady.removeListener sendListenerId
+      return
+
+    offset += self.sendSome(dataView.slice(offset))
+    if offset == data.len:
+      completer.complete()
+      self.onSendReady.removeListener sendListenerId)
+
+  return completer.getFuture
+
 proc sendAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
   ## Provides items from ``data``. Returns Future that finishes when all
   ## items are provided.
@@ -108,26 +131,8 @@ proc sendAll*[T](self: Output[T], data: seq[T]|string): Future[void] =
   var offset = self.sendSome(dataView)
   if offset == data.len:
     return now(just())
-
-  let completer = newCompleter[void]()
-  var sendListenerId: CallbackId
-
-  sendListenerId = self.onSendReady.addListener(proc() =
-    if sself.sendClosed:
-      completer.completeError("send side closed")
-      self.onSendReady.removeListener sendListenerId
-      return
-    if sself.recvClosed:
-      completer.completeError(sself.recvCloseException)
-      self.onSendReady.removeListener sendListenerId
-      return
-
-    offset += self.sendSome(dataView.slice(offset))
-    if offset == data.len:
-      completer.complete()
-      self.onSendReady.removeListener sendListenerId)
-
-  return completer.getFuture
+  else:
+    return sendAllSlow(self, data, dataView, offset)
 
 proc send*[T](self: Output[T], item: T): Future[void] =
   ## Provides a single item. Returns Future that finishes when the item
@@ -181,6 +186,10 @@ proc close*[T](self: Pipe[T], exc: ref Exception) =
 proc freeBufferSize*[T](self: Output[T]): int =
   ## How many items can be pushed to the queue without blocking?
   return sself.bufferSize - sself.queue.len
+
+proc dataAvailable*[T](self: Input[T]): int =
+  ## How many items can be received from the queue without blocking?
+  return self.queue.len
 
 proc peekMany*[T](self: Input[T]): ConstView[T] =
   ## Look at several items from the input.
@@ -248,7 +257,7 @@ proc receiveSomeInto*[T](self: Input[T], target: View[T]): int =
     offset += doRecv
   return offset
 
-proc receiveChunk[T, Ret](self: Input[T], minn: int, maxn: int, returnType: typedesc[Ret]): Future[Ret] =
+proc receiveChunkSlow[T, Ret](self: Input[T], minn: int, maxn: int, returnType: typedesc[Ret]): Future[Ret] =
   var res: Ret = when Ret is seq: newSeq[T](maxn) else: newString(maxn)
 
   var offset = self.receiveSomeInto(res.asView)
@@ -282,6 +291,17 @@ proc receiveChunk[T, Ret](self: Input[T], minn: int, maxn: int, returnType: type
       self.onRecvReady.removeListener recvListenerId)
 
   return completer.getFuture
+
+proc receiveChunk[T, Ret](self: Input[T], minn: int, maxn: int, returnType: typedesc[Ret]): Future[Ret] =
+  if self.dataAvailable >= minn:
+    let dataLen = min(maxn, self.dataAvailable)
+    var res = when Ret is seq: newSeq[T](dataLen) else: newString(dataLen)
+    res.shallow
+    let offset = self.receiveSomeInto(res.asView)
+    assert offset == dataLen
+    return now(just(res))
+  else:
+    return self.receiveChunkSlow(minn, maxn, returnType)
 
 proc receiveSome*[T](self: Input[T], n: int): Future[seq[T]] =
   ## Pops at most ``n`` items from the stream.
