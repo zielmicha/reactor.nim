@@ -64,7 +64,7 @@ proc recvCb(handle: ptr uv_udp_t; nread: int; buf: ptr uv_buf_t; `addr`: ptr Soc
   packet.source = sockaddrToIpaddr(`addr`)
 
   if socket.inputProvider.freeBufferSize > 0:
-    discard socket.inputProvider.provide(packet)
+    discard socket.inputProvider.send(packet)
 
 proc bindAddress*(socket: UdpSocket, host: IpAddress, port: int): Result[void] =
   assert(not socket.alreadyBound)

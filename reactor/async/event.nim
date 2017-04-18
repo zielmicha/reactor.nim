@@ -1,21 +1,24 @@
+# included from reactor/async.nim
 ## This module implements support for event listeners. The Event type represents an event that can triggered and subscribed to.
 
 type
   CallbackId* = int64
 
   Event*[T] = ref object
+    # You may be tempted to replace Table with something more efficient,
+    # but it turns out that hashtable is hard to outperform.
     callbacks: Table[CallbackId, proc(arg: T)]
     nextId: CallbackId
     executor: LoopExecutor
 
-proc newEvent*[T](): Event[T] =
-  newEvent(result)
-
 proc newEvent*[T](t: var Event[T]) =
   new(t)
   t.nextId = 1
-  t.callbacks = initTable[CallbackId, proc(arg: T)]()
+  t.callbacks = initTable[CallbackId, proc(arg: T)](initialSize=1)
   t.executor = newLoopExecutor()
+
+proc newEvent*[T](): Event[T] =
+  newEvent(result)
 
 proc addListener*[T](ev: Event[T], callback: proc(arg: T)): CallbackId {.discardable.} =
   result = ev.nextId

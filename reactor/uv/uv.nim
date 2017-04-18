@@ -91,7 +91,7 @@ type
   uv_req_type* = enum
     UV_UNKNOWN_REQ = 0, UV_REQ, UV_CONNECT, UV_WRITE, UV_SHUTDOWN, UV_UDP_SEND, 
     UV_FS, UV_WORK, UV_GETADDRINFO, UV_GETNAMEINFO, UV_REQ_TYPE_ARG_MAX
-  uv_loop_t* = pointer
+  uv_loop_t* = object
   uv_handle_t* = object
     data*: pointer
   uv_stream_t* = uv_handle_t
@@ -332,7 +332,7 @@ proc uv_tcp_simultaneous_accepts*(handle: ptr uv_tcp_t; enable: cint): cint {.im
 type 
   uv_tcp_flags* = enum 
     UV_TCP_IPV6ONLY = 1
-
+    UV_TCP_REUSEPORT = 2
 
 proc uv_tcp_bind*(handle: ptr uv_tcp_t; `addr`: ptr SockAddr; flags: cuint): cint {.importc.}
 proc uv_tcp_getsockname*(handle: ptr uv_tcp_t; name: ptr SockAddr;
