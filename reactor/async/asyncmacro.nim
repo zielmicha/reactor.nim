@@ -171,8 +171,9 @@ macro async*(a): untyped =
   result[3].add returnTypeNew
   for param in params:
     result[3].add param
-  result[4] = pragmas
-  result[6] = asyncBody
+  result[4] = if pragmas.len != 0: pragmas else: newNimNode(nnkEmpty)
+  if body.kind != nnkEmpty:
+    result[6] = asyncBody
 
 macro asyncFor*(iterClause: untyped, body: untyped): untyped =
   ## An asynchronous version of `for` that works on Inputs. Example:
