@@ -1,5 +1,5 @@
 import reactor/uv/uv, reactor/ipaddress, reactor/ipaddress, reactor/uv/uvsizeof
-import os
+import os, posix
 
 type UVError* = object of Exception
 
@@ -32,7 +32,7 @@ var threadLoop {.threadvar.}: ptr uv_loop_t
 proc init() =
   threadLoop = uv_default_loop()
   when not defined(windows):
-    signal(SIGPIPE, SIG_IGN)
+    discard sigignore(SIGPIPE)
 
 when not defined(enableMtcp):
   init()
