@@ -48,7 +48,7 @@ proc open*(path: string, flags: FileFlags, mode: cint=0o600): Future[FileFd] =
 when not defined(windows):
   import posix, reactor/syscall
 
-  proc setBlocking(fd: FileFd) =
+  proc setBlocking*(fd: FileFd) =
     var flags = fcntl(fd.cint, F_GETFL, 0);
     if flags == -1:
       raiseOSError(osLastError())

@@ -22,6 +22,7 @@ proc startProcess*(command: seq[string],
                    additionalEnv: openarray[tuple[k: string, v: string]]=[],
                    additionalFiles: openarray[tuple[target: cint, src: cint]]=[]): Process =
   ## Start a new process.
+  # TODO: leak
   let process = cast[ptr uv_process_t](newUvHandle(UV_PROCESS))
 
   assert command.len > 0
@@ -98,3 +99,7 @@ proc waitForSuccess*(process: Process): Future[void] =
   process.wait().then(proc(code: int): Future[void] =
                       if code != 0: return now(error(void, "bad exit code $1 from $2" % [$code, $process.args]))
                       else: return now(just()))
+
+proc detach*(process: Process) =
+  # TODO
+  discard

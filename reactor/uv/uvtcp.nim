@@ -4,6 +4,7 @@ import reactor/async
 import reactor/resolv
 import reactor/ipaddress
 import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, reactor/uv/errno
+import reactor/uv/uvlisten
 import options
 
 when defined(windows):
@@ -34,9 +35,6 @@ type
 
 export UvStream
 
-proc newTcpConnection(client: ptr uv_handle_t): TcpConnection =
-  return newUvPipe[TcpConnection](cast[ptr uv_stream_t](client))
-
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
   ## Get address of a remote peer (similar to POSIX getpeername).
   var name: SockAddr_storage
@@ -57,44 +55,9 @@ proc getSockAddr*(conn: TcpBoundSocket | TcpConnection): tuple[address: IpAddres
 proc getSockAddr*(conn: TcpServer): auto =
   return conn.sockAddr
 
-proc onNewConnection(server: ptr uv_stream_t; status: cint) {.cdecl.} =
-  let serverObj = cast[TcpServer](server.data)
-
-  var client = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
-  checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), client)
-  let err = uv_accept(server, cast[ptr uv_stream_t](client))
-  if err != 0:
-     echo "Error: failed to accept connection" # FIXME: memory leak etc
-     return
-
-  var conn = newTcpConnection(client)
-
-  let provided = serverObj.incomingConnectionsProvider.sendSome(singleItemView(conn))
-  if provided == 0:
-    stderr.writeLine "Warning: dropped incoming TCP connection"
-    # FIXME: don't accept connection if there is no space in the queue
-    conn.BytePipe.close(new(CloseException))
-
-proc tcpServerClosed(server: ptr uv_stream_t) {.cdecl.} =
-  let serverObj = cast[TcpServer](server.data)
-  GC_unref(serverObj)
-  freeUv(server)
-
-proc newTcpServer(server: ptr uv_tcp_t): TcpServer =
-  let serverObj = new(TcpServer)
-  (serverObj.incomingConnections, serverObj.incomingConnectionsProvider) = newInputOutputPair[TcpConnection]()
-
-  proc closeTcpServer(err: ref Exception) =
-    uv_close(cast[ptr uv_handle_t](server), tcpServerClosed)
-
-  # FIXME: leak
-  # serverObj.incomingConnectionsProvider.onRecvClose.addListener closeTcpServer
-
-  GC_ref(serverObj)
-  server.data = cast[pointer](serverObj)
-
-  return serverObj
-
+proc initClient(t: typedesc[TcpConnection]): ptr uv_tcp_t =
+  result = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
+  checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), result)
 
 proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Future[TcpServer] =
   let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
@@ -113,10 +76,10 @@ proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Fu
     else:
       break
 
-  let serverObj = newTcpServer(server)
+  let serverObj = newListenerServer[TcpServer, TcpConnection, uv_tcp_t](server)
   serverObj.sockAddr = getSockAddr(server) # for getSockAddr
 
-  let listenErr = uv_listen(cast[ptr uv_stream_t](server), 5, onNewConnection)
+  let listenErr = uv_listen(cast[ptr uv_stream_t](server), 5, onNewConnection[TcpServer, TcpConnection])
   if listenErr < 0:
     return now(error(TcpServer, uvError(listenErr, "listen")))
 

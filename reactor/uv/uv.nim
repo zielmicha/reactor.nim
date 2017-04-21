@@ -97,7 +97,7 @@ type
   uv_stream_t* = uv_handle_t
   uv_tcp_t* = uv_handle_t
   uv_udp_t* = uv_handle_t
-  uv_pipe_t* = pointer
+  uv_pipe_t* = uv_handle_t
   uv_tty_t* = pointer
   uv_poll_t* = uv_handle_t
   uv_timer_t* = uv_handle_t

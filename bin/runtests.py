@@ -9,8 +9,9 @@ os.chdir(os.path.dirname(__file__)); os.chdir('..')
 for name in glob.glob('tests/*.nim'):
     lines = open(name).read().splitlines()
     if not (lines and lines[0].startswith('# TEST.')):
-        # not marked as test, at least compile it
-        subprocess.check_call(['nim', 'c', '--verbosity:0', name])
+        if lines and ('disabled' not in lines[0]):
+            # not marked as test, at least compile it
+            subprocess.check_call(['nim', 'c', '--verbosity:0', name])
         continue
 
     assert lines[1].startswith('discard """')

@@ -12,6 +12,9 @@ type
     sendCloseException: ref Exception
     recvCloseException: ref Exception
 
+    when not defined(release):
+      marker: uint32 # has to be 0xDEADBEEF
+
   Output* {.borrow: `.`.}[T]  = distinct Input[T]
 
   Pipe*[T] = ref object {.inheritable.}
@@ -30,6 +33,16 @@ proc getInput[T](s: Output[T]): Input[T] {.inline.} = Input[T](s)
 
 template sself = self.getInput
 
+proc `$`*[T](input: Input[T]): string =
+  when not defined(release):
+    assert input.marker == 0xDEADBEEF'u32
+  return "Input[$1](...)" % name(T)
+
+proc `$`*[T](output: Output[T]): string =
+  when not defined(release):
+    assert output.getInput.marker == 0xDEADBEEF'u32
+  return "Output[$1](...)" % name(T)
+
 proc newPipe*[T](input: Input[T], output: Output[T]): Pipe[T] =
   new(result)
   result.input = input
@@ -40,6 +53,8 @@ proc newInputOutputPair*[T](bufferSize=0): tuple[input: Input[T], output: Output
   ## If more than ``bufferSize`` items are provided without being consumed by stream, ``provide`` operation blocks.
   ## If ``bufferSize == 0`` is the implementation specific default is chosen.
   new(result.input)
+  when not defined(release):
+    result.input.marker = 0xDEADBEEF'u32
   result.input.queue = newQueue[T](baseBufferSizeFor(T) * 8)
 
   result.input.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 32) else: bufferSize
@@ -321,12 +336,22 @@ proc receive*[T](self: Input[T]): Future[T] =
   ## Pop an item from the stream.
   return self.receiveAll(1).then((x: seq[T]) => x[0])
 
-proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil) =
+proc completeFromStreamClose*(c: Completer[void], err: ref Exception) =
+  ## Complete ``c`` with error ``err`` is not ``JustClose``.
+  if err.getOriginal == JustClose:
+    c.complete()
+  else:
+    c.completeError(err)
+
+proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil): Future[void] =
   ## Copy data in chunks from ``self`` to ``target``. If ``function`` is provided it will be called to copy data from source to destination chunks (so custom processing can be made).
   ##
   ## Use this instead of ``pipe`` to reduce function call overhead for small elements.
+  ##
+  ## Returned future completes successfuly when there is no more data to copy. If any errros occurs the future completes with error.
   var targetListenerId: CallbackId
   var selfListenerId: CallbackId
+  let ready = newCompleter[void]()
 
   proc stop() =
     target.onSendReady.removeListener(targetListenerId)
@@ -336,18 +361,21 @@ proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source
     while true:
       let view = self.peekMany()
       if Input[R](target).recvClosed:
-        self.recvClose(Input[R](target).recvCloseException)
         stop()
+        self.recvClose(Input[R](target).recvCloseException)
+        ready.completeFromStreamClose(Input[R](target).recvCloseException)
         break
 
       if view.len == 0:
         if self.sendClosed:
           target.sendClose(self.sendCloseException)
+          ready.completeFromStreamClose(self.sendCloseException)
           stop()
         break
 
       if Input[R](target).sendClosed:
         target.sendClose(newException(ValueError, "write side closed"))
+        ready.completeFromStreamClose(newException(ValueError, "write side closed"))
         stop()
         break
 
@@ -369,6 +397,7 @@ proc pipeChunks*[T, R](self: Input[T], target: Output[R], function: (proc(source
   targetListenerId = target.onSendReady.addListener(pipeSome)
   selfListenerId = self.onRecvReady.addListener(pipeSome)
   pipeSome()
+  return ready.getFuture
 
 proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
   return proc(source: ConstView[T], target: var seq[R]) =
@@ -383,20 +412,24 @@ proc flatMapperFunc[T, R](f: (proc(x: T): seq[R])): auto =
       for item in f(source[i]):
         target.add item
 
-proc pipe*[T, R](self: Input[T], target: Output[R], function: (proc(x: T): R)) =
+proc pipe*[T, R](self: Input[T], target: Output[R], function: (proc(x: T): R)): Future[void] =
   ## Copy data from ``Input`` to ``Output`` while processing them with ``function``.
+  ##
+  ## Returned future completes successfuly when there is no more data to copy. If any errros occurs the future completes with error.
   # TODO: pipe should return Future[void]
   pipeChunks(self, target, mapperFunc(function))
 
-proc pipe*[T](self: Input[T], target: Output[T]) =
+proc pipe*[T](self: Input[T], target: Output[T]): Future[void] =
   ## Copy data from ``Input`` to ``Output``.
+  ##
+  ## Returned future completes successfuly when there is no more data to copy. If any errros occurs the future completes with error.
+  when not defined(release): assert self.marker == 0xDEADBEEF'u32
   pipeChunks(self, target, nil)
 
 proc mapChunks*[T, R](self: Input[T], function: (proc(source: ConstView[T], target: var seq[R]))): Input[R] =
   ## Map data in chunks from ``self`` and return mapped stream. ``function`` will be called to copy data from source to destination chunks (so custom processing can be made).
   ##
   ## Use this instead of ``map`` to function call overhead for small elements.
-
   let (rstream, rprovider) = newInputOutputPair[R]()
   pipeChunks(self, rprovider, function)
   return rstream
