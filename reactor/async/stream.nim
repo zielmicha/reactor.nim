@@ -202,7 +202,7 @@ proc discardItems*[T](self: Input[T], count: int) =
 
   self.queue.popFront(count)
 
-proc waitForData*[T](self: Input[T], allowSpurious=false): Future[void] =
+proc waitForDataSlow[T](self: Input[T], allowSpurious=false): Future[void] =
   ## Waits until some data is available in the buffer. For use with ``peekMany`` and ``discardItems``.
   if self.queue.len != 0:
     return now(just())
@@ -223,6 +223,12 @@ proc waitForData*[T](self: Input[T], allowSpurious=false): Future[void] =
 
   return completer.getFuture
 
+proc waitForData*[T](self: Input[T], allowSpurious=false): Future[void] =
+  if self.queue.len != 0:
+    return now(just())
+
+  return self.waitForDataSlow(allowSpurious=allowSpurious)
+
 proc waitForSpace*[T](self: Output[T], allowSpurious=false): Future[void] =
   ## Waits until space is available in the buffer. For use with ``sendSome`` and ``freeBufferSize``.
   if self.freeBufferSize != 0:
@@ -234,13 +240,13 @@ proc waitForSpace*[T](self: Output[T], allowSpurious=false): Future[void] =
   let completer = newCompleter[void]()
   var sendListenerId: CallbackId
 
-  sendListenerId = self.onSendReady.addListener(proc() =
+  sendListenerId = self.onSendReady.addListener(bindOnlyVars([self, completer, sendListenerId], proc() =
     if self.freeBufferSize != 0 or allowSpurious:
       completer.complete()
       self.onSendReady.removeListener(sendListenerId)
     elif sself.recvClosed:
       completer.completeError(sself.recvCloseException)
-      self.onSendReady.removeListener(sendListenerId))
+      self.onSendReady.removeListener(sendListenerId)))
 
   return completer.getFuture
 

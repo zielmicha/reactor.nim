@@ -4,7 +4,7 @@ import tables, hashes, strutils
 export future.`=>`, future.`->`
 
 import reactor/util
-import collections/views, collections/queue
+import collections/views, collections/queue, collections/lang
 import reactor/loop
 
 const debugFutures = not defined(release)
