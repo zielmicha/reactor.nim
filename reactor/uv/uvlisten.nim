@@ -10,11 +10,10 @@ proc newListenerServer*[ServerType, ConnType, UvType](server: ptr UvType): Serve
   let serverObj = new(ServerType)
   (serverObj.incomingConnections, serverObj.incomingConnectionsProvider) = newInputOutputPair[ConnType]()
 
-  proc closeServer(err: ref Exception) =
+  proc closeServer() =
     uv_close(cast[ptr uv_handle_t](server), serverClosed[ServerType, ConnType])
 
-  # FIXME: leak
-  # serverObj.incomingConnectionsProvider.onRecvClose.addListener closeServer
+  serverObj.incomingConnectionsProvider.waitForRecvClose(closeServer)
 
   GC_ref(serverObj)
   server.data = cast[pointer](serverObj)
