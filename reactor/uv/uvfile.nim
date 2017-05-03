@@ -71,7 +71,7 @@ when not defined(windows):
     proc piper() {.async.} =
       var buffer = newString(40960)
       setBlocking(fd)
-      # TODO: defer: close(fd)
+      defer: discard close(fd.cint)
       while true:
         await output.waitForSpace
         let readSize = min(output.freeBufferSize, buffer.len)
