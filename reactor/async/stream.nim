@@ -187,6 +187,14 @@ proc sendClose*(self: Output, exc: ref Exception) =
   sself.sendCloseException = exc
   sself.onRecvReady.callListener()
 
+proc waitForRecvClose*[T](self: Output[T], callback: proc()) =
+  var recvListenerId: CallbackId
+
+  recvListenerId = self.onSendReady.addListener(proc() =
+    if sself.recvClosed:
+      callback()
+      self.onSendReady.removeListener(recvListenerId))
+
 proc recvClose*[T](self: Input[T], exc: ref Exception) =
   ## Closes the input stream -- signals that no more items will be received.
   if self.recvClosed: return

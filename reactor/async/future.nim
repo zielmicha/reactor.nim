@@ -84,7 +84,7 @@ proc addCallback[T](c: Completer[T], cb: FutureCallback[T]) =
     let newList = CallbackList[T](callback: cb, next: c.callbackList)
     c.callbackList = newList
 
-proc now*[T](res: Result[T]): Future[T] =
+converter now*[T](res: Result[T]): Future[T] =
   ## Returns already completed Future containing result `res`.
   if res.isSuccess:
     when T is void:
