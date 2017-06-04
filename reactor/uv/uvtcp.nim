@@ -63,8 +63,11 @@ proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Fu
   let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), server)
 
+  if addresses.len == 0:
+    return now(error(TcpServer, "no IP address"))
+
   for address in addresses:
-    var sockaddress: SockAddr
+    var sockaddress: SockAddr_storage
     ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress), address, port)
     let flags = if reusePort: cuint(UV_TCP_REUSEPORT)
                 else: cuint(0)
