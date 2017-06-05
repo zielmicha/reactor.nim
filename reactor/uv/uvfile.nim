@@ -64,7 +64,7 @@ when not defined(windows):
     return spawnSyscall(posix.write(fd, buffer, size))
 
   proc createInputFromFd*(fd: FileFd): ByteInput =
-    ## Create ByteInput reading data from a file descriptor. ``fd`` should represent regular file.
+    ## Create ByteInput reading data from a file descriptor. ``fd`` should represent regular file. Do not close ``fd`` manually, it will be closed automaticall.y
     # TODO: use libuv uv_fs_read for better performance
     let (input, output) = newInputOutputPair[byte]()
 
@@ -88,7 +88,7 @@ when not defined(windows):
     return input
 
   proc createOutputFromFd*(fd: FileFd): ByteOutput =
-    ## Create ByteOutput writing data to a file descriptor. ``fd`` should represent regular file.
+    ## Create ByteOutput writing data to a file descriptor. ``fd`` should represent regular file. Do not close ``fd`` manually, it will be closed automaticall.y
     # TODO: use libuv uv_fs_write for better performance
     let (input, output) = newInputOutputPair[byte]()
 
