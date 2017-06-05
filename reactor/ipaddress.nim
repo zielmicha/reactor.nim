@@ -125,6 +125,7 @@ proc `$`*(a: IpAddress): string =
   case a.kind:
   of ip4: return $a.ip4
   of ip6: return $a.ip6
+  else: doAssert(false)
 
 proc `$`*[T](a: Interface[T]): string =
   "$1/$2" % [$a.address, $a.mask]
@@ -254,28 +255,52 @@ proc contains*(s: IpInterface, i: IpAddress): bool =
     of ip6:
       return contains((s.address.ip6, s.mask), i.ip6)
 
-proc nthAddress*(i: IpInterface, n: int64): IpAddress =
-  if n < 0 or (i.mask < 63 and (1 shl i.mask) <= n):
-    raise newException(ValueError, "address out of network range")
-
-  template mixAddr(address, length) =
+proc networkAddress*(i: IpInterface): IpAddress =
+  template compute(address, length) =
     var target = array[length, uint8](address)
-    var mask = i.mask
-    var i = rest.len - 1
-    while mask > 0:
-      let cmask = ((1 shl max(mask, 8)) - 1).uint8
-      target[i] = (target[i] and (not cmask)) or (rest[i].uint8 and cmask)
-      mask -= 8
-      i -= 1
+
+    for j in 0..<length:
+      let tmask = 8 - min(max(i.mask - j * 8, 0), 8)
+      target[j] = target[j] and uint8(not ((1 shl tmask) - 1))
+
     return target.ipAddress
 
   case i.address.kind:
     of ip4:
-      let rest = pack(n.uint32, bigEndian)
-      mixAddr(i.address.ip4, 4)
+      compute(i.address.ip4, 4)
     of ip6:
-      let rest = pack(0.uint64, bigEndian) & pack(n.uint64, bigEndian)
-      mixAddr(i.address.ip6, 16)
+      compute(i.address.ip6, 16)
+
+proc `+`*(i: IpAddress, k: int64): IpAddress =
+  var k = k
+  template compute(address, length) =
+    var target = array[length, uint8](address)
+    var sign = if k >= 0: 1 else: -1
+    k = abs(k)
+    var overflow = 0
+    for jj in 0..<length:
+      let j = length - jj - 1
+      let val = target[j].int + (k and 0xFF) * sign + overflow
+      target[j] = val and 0xFF
+      overflow = val shr 8
+      k = k shr 8
+
+    if k > 0 or overflow > 0:
+      raise newException(ValueError, "IP address range exceeded")
+
+    return target.ipAddress
+
+  case i.kind:
+    of ip4:
+      compute(i.ip4, 4)
+    of ip6:
+      compute(i.ip6, 16)
+
+proc nthAddress*(i: IpInterface, n: int64): IpAddress =
+  if n < 0 or (i.mask < 63 and (1 shl i.mask) <= n):
+    raise newException(ValueError, "address out of network range")
+
+  return i.networkAddress + n
 
 proc hash*(x: IpAddress): int =
   result = 0
@@ -308,3 +333,11 @@ when isMainModule:
   assert($parseAddress("2001:db8::1") == "2001:db8::1")
   assert($parseAddress("2001:db8:0:0:0:0:2:1") == "2001:db8::2:1")
   assert($parseAddress("2001:db8:0:1:1:1:1:1") == "2001:db8:0:1:1:1:1:1")
+
+  assert(networkAddress((parseAddress("255.255.255.255"), 9)) == parseAddress("255.128.0.0"))
+  assert(networkAddress((parseAddress("10.66.77.22"), 24)) == parseAddress("10.66.77.0"))
+
+  assert(parseAddress("10.66.77.22") + 1 == parseAddress("10.66.77.23"))
+  assert(parseAddress("10.66.77.22") + 257 == parseAddress("10.66.78.23"))
+  assert(parseAddress("10.66.77.22") + 256*256 == parseAddress("10.67.77.22"))
+  assert(parseAddress("10.66.77.22") + 256*256*256*10 == parseAddress("20.66.77.22"))
