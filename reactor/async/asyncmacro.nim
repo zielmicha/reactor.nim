@@ -102,6 +102,7 @@ macro async*(a): untyped =
   let returnTypeFull = a[3][0]
 
   let procNameStripped = if procName.kind == nnkPostfix: procName[1] else: procName
+  let procNameStr = newStrLitNode($procNameStripped)
 
   if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future")):
     error("invalid return type from async proc (expected Future[T])")
@@ -150,7 +151,7 @@ macro async*(a): untyped =
       when `returnType` is void:
         asyncProcCompleter.complete()
       else:
-        asyncProcCompleter.completeError("missing asyncReturn")
+        asyncProcCompleter.completeError(`procNameStr` & ": missing asyncReturn")
 
     let iter: (iterator(): AsyncIterator) = `innerIteratorName`
 
@@ -174,6 +175,12 @@ macro async*(a): untyped =
   result[4] = if pragmas.len != 0: pragmas else: newNimNode(nnkEmpty)
   if body.kind != nnkEmpty:
     result[6] = asyncBody
+
+template asyncMain*(body: untyped): untyped =
+  proc mainBody() {.async.} =
+    body
+
+  mainBody().runMain
 
 macro asyncFor*(iterClause: untyped, body: untyped): untyped =
   ## An asynchronous version of `for` that works on Inputs. Example:
