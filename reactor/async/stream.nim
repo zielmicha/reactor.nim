@@ -263,13 +263,13 @@ proc waitForSpace*[T](self: Output[T], allowSpurious=false): Future[void] =
   let completer = newCompleter[void]()
   var sendListenerId: CallbackId
 
-  sendListenerId = self.onSendReady.addListener(bindOnlyVars([self, completer, sendListenerId], proc() =
+  sendListenerId = self.onSendReady.addListener(proc() =
     if self.freeBufferSize != 0 or allowSpurious:
       completer.complete()
       self.onSendReady.removeListener(sendListenerId)
     elif sself.recvClosed:
       completer.completeError(sself.recvCloseException)
-      self.onSendReady.removeListener(sendListenerId)))
+      self.onSendReady.removeListener(sendListenerId))
 
   return completer.getFuture
 
