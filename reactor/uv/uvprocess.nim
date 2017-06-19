@@ -1,6 +1,8 @@
-import reactor/uv/uv, reactor/uv/uvutil, reactor/async, posix, strutils, os, tables
+import reactor/uv/uv, reactor/uv/uvutil, reactor/file, reactor/async, posix, strutils, os, tables
 
 type Process* = ref object
+  files*: seq[BytePipe]
+  pid*: int
   completer: Completer[int]
   options: uv_process_options_t
 
@@ -17,11 +19,15 @@ proc makeRawArray(args: var seq[string], start=0): seq[pointer] =
     result.add(arg.cstring)
   result.add(nil)
 
+var SOCK_CLOEXEC* {.importc, header: "<sys/socket.h>".}: cint
+
 proc startProcess*(command: seq[string],
                    environ: TableRef[string, string]=nil,
                    additionalEnv: openarray[tuple[k: string, v: string]]=[],
-                   additionalFiles: openarray[tuple[target: cint, src: cint]]=[]): Process =
+                   additionalFiles: openarray[tuple[target: cint, src: cint]]=[],
+                   pipeFiles: openarray[cint]=[]): Process =
   ## Start a new process.
+  var additionalFiles = @additionalFiles
   # TODO: leak
   let process = cast[ptr uv_process_t](newUvHandle(UV_PROCESS))
 
@@ -36,7 +42,7 @@ proc startProcess*(command: seq[string],
     let process = cast[Process](req.data)
     process.completer.complete(exit_status.int)
     GC_unref(process)
-    uv_close(req, freeUvMemory)
+    uv_close(cast[ptr uv_handle_t](req), freeUvMemory)
 
   result.options.exit_cb = on_exit
 
@@ -67,7 +73,16 @@ proc startProcess*(command: seq[string],
 
   result.stdioContainers = @[]
 
-  var maxFd = 0
+  result.files = @[]
+  for fd in pipeFiles:
+    var pair: array[0..1, cint]
+    checkZero "socketpair", socketpair(AF_UNIX, SOCK_STREAM or SOCK_CLOEXEC, 0, pair)
+    additionalFiles.add((fd, pair[1]))
+    defer: discard close(pair[1])
+
+    result.files.add streamFromFd(pair[0])
+
+  var maxFd = 2
   for entry in additionalFiles: maxFd = max(maxFd, entry.target)
 
   for fd in 0..maxFd:
@@ -87,6 +102,7 @@ proc startProcess*(command: seq[string],
   result.options.stdio = addr result.stdioContainers[0]
 
   let res = uv_spawn(getThreadUvLoop(), process, addr result.options)
+  result.pid = process.pid
   if res < 0:
     result.completer.completeError(uvError(res, "spawn " & $command))
 

@@ -64,7 +64,7 @@ proc internalGetCompleter*[T](c: Future[T]): Completer[T] =
     return c.completer
 
 proc destroyCompleter[T](f: Completer[T]) =
-  if not f.consumed:
+  if not f.consumed and f.isFinished and f.result.isError:
     when not defined(reactorIgnoreUnconsumedFutures):
       stderr.writeLine "Destroyed unconsumed future ", $f.getFuture
       when debugFutures:

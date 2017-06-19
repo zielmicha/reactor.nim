@@ -49,3 +49,6 @@ proc runLoopOnce*(): bool =
 
 proc stopLoop*() =
   uv_stop(getThreadUvLoop())
+
+proc disableFdInheritance*() =
+  uv_disable_stdio_inheritance()
