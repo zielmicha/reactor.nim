@@ -1,4 +1,4 @@
-import reactor/uv/uv, reactor/uv/uvutil, reactor/util
+import reactor/uv/uv, reactor/uv/uvutil, reactor/util, times
 
 type
   LoopExecutor* = ref object
@@ -31,6 +31,7 @@ proc enable*(self: LoopExecutor) =
 
 proc newLoopExecutor*(): LoopExecutor =
   new(result)
+  # TODO(leak)
   result.callback = nothing
   result.enabled = false
   result.uvIdler = cast[ptr uv_idle_t](newUvHandle(UV_IDLE))
@@ -52,3 +53,29 @@ proc stopLoop*() =
 
 proc disableFdInheritance*() =
   uv_disable_stdio_inheritance()
+
+# GC nodelay
+
+var gcNoDelayHandle {.threadvar.}: ptr uv_prepare_t
+
+proc gcSmallCollect() =
+  # this should be really cheap if stack is small
+  when defined(benchNoDelayGc):
+    let start = cpuTime()
+
+  when declared(GC_step):
+    GC_step(1_000_000, strongAdvice=true)
+  else:
+    static:
+      echo "[WARN] Using GC_fullCollect"
+    GC_fullCollect()
+
+  when defined(benchNoDelayGc):
+    echo cpuTime() - start
+
+proc enableGcNoDelay*() =
+  ## Enable garbage collection during after event loop tick.
+  if gcNoDelayHandle == nil:
+    gcNoDelayHandle = cast[ptr uv_prepare_t](newUvHandle(UV_PREPARE))
+    checkZero "prepare_init", uv_prepare_init(getThreadUvLoop(), gcNoDelayHandle)
+  checkZero "prepare_start", uv_prepare_start(gcNoDelayHandle, proc(handle: ptr uv_prepare_t) {.cdecl.} = gcSmallCollect())

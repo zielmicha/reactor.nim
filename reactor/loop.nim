@@ -27,3 +27,22 @@ proc initThreadLoop*() =
 proc destroyThreadLoop*() =
   ## Destroys the event loop for this thread.
   destroyThreadLoopImpl()
+
+var callSoonExecutor {.threadvar.}: LoopExecutor
+var callSoonList {.threadvar.}: seq[proc()]
+
+proc callSoon*(p: proc()) =
+  if callSoonExecutor == nil:
+    callSoonExecutor = newLoopExecutor()
+    callSoonList = @[]
+    callSoonExecutor.callback = proc() =
+      let copied = callSoonList
+      callSoonList = @[]
+      for item in copied:
+        item()
+
+      if callSoonList.len == 0:
+        callSoonExecutor.disable
+
+  callSoonList.add(p)
+  callSoonExecutor.enable

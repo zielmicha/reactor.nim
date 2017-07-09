@@ -65,7 +65,6 @@ proc freeStream(stream: ptr uv_stream_t) {.cdecl.} =
   freeUvMemory(stream)
 
 proc closeStream(self: UvPipe) =
-  echo "closing stream"
   self.closed = true
   uv_close(cast[ptr uv_handle_t](self.stream), freeStream)
   self.inputOther.sendClose(JustClose)

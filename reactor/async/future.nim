@@ -193,15 +193,15 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
 proc onSuccessOrError*(f: Future[void], onSuccess: (proc()), onError: (proc(t:ref Exception))) =
   onSuccessOrError[void](f, onSuccess, onError)
 
-proc onSuccessOrError*[T](f: Future[T], function: (proc(t: Result[T]))) =
-  onSuccessOrError(f,
-    (proc(t: T) = function(just(t))),
-    proc(exc: ref Exception) = function(error(T, exc)))
-
 proc onSuccessOrError*(f: Future[void], function: (proc(t: Result[void]))) =
   onSuccessOrError(f,
     proc() = function(just()),
     proc(exc: ref Exception) = function(error(void, exc)))
+
+proc onSuccessOrError*[T](f: Future[T], function: (proc(t: Result[T]))) =
+  onSuccessOrError(f,
+    (proc(t: T) = function(just(t))),
+    proc(exc: ref Exception) = function(error(T, exc)))
 
 proc onError*(f: Future[Bottom], onError: (proc(t: ref Exception))) =
   onSuccessOrError(f, nil, onError)
@@ -323,11 +323,13 @@ proc completeError*(self: Completer, x: string) =
 proc waitForever*(): Future[void] =
   ## Returns a future that never completes.
   let completer = newCompleter[void]()
+  GC_ref(completer) # prevent it from being garbage collected
   return completer.getFuture
 
 proc waitForever*[T](t: typedesc[T]): Future[T] =
   ## Returns a future that never completes.
   let completer = newCompleter[T]()
+  GC_ref(completer)
   return completer.getFuture
 
 proc runLoop*[T](f: Future[T]): T =

@@ -5,6 +5,7 @@ type Process* = ref object
   pid*: int
   completer: Completer[int]
   options: uv_process_options_t
+  process: ptr uv_process_t
 
   args: seq[string]
   argsRaw: seq[pointer]
@@ -33,7 +34,7 @@ proc startProcess*(command: seq[string],
 
   assert command.len > 0
 
-  result = Process(completer: newCompleter[int]())
+  result = Process(completer: newCompleter[int](), process: process)
   zeroMem(addr result.options, sizeof result.options)
   GC_ref(result)
   process.data = cast[pointer](result)
@@ -74,12 +75,19 @@ proc startProcess*(command: seq[string],
   result.stdioContainers = @[]
 
   result.files = @[]
+
+  var closeFds: seq[cint] = @[]
+
+  defer:
+    for fd in closeFds:
+      discard close(fd)
+
   for fd in pipeFiles:
     var pair: array[0..1, cint]
     checkZero "socketpair", socketpair(AF_UNIX, SOCK_STREAM or SOCK_CLOEXEC, 0, pair)
     additionalFiles.add((fd, pair[1]))
-    defer: discard close(pair[1])
 
+    closeFds.add pair[1]
     result.files.add streamFromFd(pair[0])
 
   var maxFd = 2
@@ -109,6 +117,10 @@ proc startProcess*(command: seq[string],
 proc wait*(process: Process): Future[int] =
   ## Wait until process returns.
   return process.completer.getFuture
+
+proc kill*(process: Process, signal: int = 15) =
+  if uv_process_kill(process.process, signal.cint) < 0:
+    raise newException(Exception, "failed to kill process")
 
 proc waitForSuccess*(process: Process): Future[void] =
   ## Wait until process returns. Return error if exit code is other than 0.

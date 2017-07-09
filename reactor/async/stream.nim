@@ -63,6 +63,11 @@ proc newInputOutputPair*[T](bufferSize=0): tuple[input: Input[T], output: Output
   newEvent(result.input.onRecvReady)
   newEvent(result.input.onSendReady)
 
+proc newPipe*[T](typ: typedesc[T]): tuple[a: Pipe[T], b: Pipe[T]] =
+  result = (Pipe[T](), Pipe[T]())
+  (result.a.input, result.b.output) = newInputOutputPair[T]()
+  (result.b.input, result.a.output) = newInputOutputPair[T]()
+
 {.deprecated: [newStreamProviderPair: newInputOutputPair].}
 
 proc `onRecvReady`*[T](self: Input[T]): auto =
