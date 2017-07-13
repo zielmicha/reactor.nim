@@ -35,8 +35,8 @@ proc connectUnix*(path: string): Future[UnixConnection] =
 
     GC_unref(state)
 
-  let handle = cast[ptr uv_pipe_t](newUvHandle(UV_TCP))
-  checkZero "tcp_init", uv_pipe_init(getThreadUvLoop(), handle, 0)
+  let handle = cast[ptr uv_pipe_t](newUvHandle(UV_NAMED_PIPE))
+  checkZero "pipe_init", uv_pipe_init(getThreadUvLoop(), handle, 0)
   uv_pipe_connect(connectReq, handle, $path, connectCb)
   return state.completer.getFuture
 

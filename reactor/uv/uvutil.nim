@@ -15,14 +15,22 @@ template checkZero*(name, e) =
   if e != 0:
     raise newException(UVError, "call to " & name & " failed")
 
+proc calloc(o: csize, a: csize): pointer {.importc, header: "<string.h>".}
+proc free(a: pointer) {.importc, header: "<string.h>".}
+
+proc allocUv*(a: int): pointer =
+  result = calloc(1, a.csize)
+
+proc freeUv*(t: pointer) =
+  free(t)
+
+#
+
 proc newUvReq*(`type`: uv_req_type): pointer =
-  return allocShared0(uv_req_size(`type`))
+  return allocUv(uv_req_size(`type`))
 
 proc newUvHandle*(`type`: uv_handle_type): pointer =
-  return allocShared0(uv_handle_size(`type`))
-
-proc freeUv*(t: ptr) =
-  freeShared(t)
+  return allocUv(uv_handle_size(`type`))
 
 proc freeUvMemory*(t: ptr uv_handle_t) {.cdecl.} =
   freeUv(t)

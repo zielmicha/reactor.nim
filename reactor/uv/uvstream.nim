@@ -1,6 +1,6 @@
 import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/errno
 import reactor/async, reactor/util, collections/views
-import posix
+import posix, typetraits
 
 type UvPipe* = ref object of BytePipe
   inputOther: ByteOutput
@@ -11,6 +11,9 @@ type UvPipe* = ref object of BytePipe
   #shutdownReq: ptr uv_shutdown_t
   paused: bool
   closed: bool
+
+  when not defined(release):
+    typeName: string
 
 proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
   let self = cast[UvPipe](stream.data)
@@ -62,9 +65,13 @@ proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
     self.writeReady()
 
 proc freeStream(stream: ptr uv_stream_t) {.cdecl.} =
+  # GC_unref(cast[RootRef](stream.data)) # is RootRef good enough?
+  assert stream.data != nil
+  stream.data = nil
   freeUvMemory(stream)
 
 proc closeStream(self: UvPipe) =
+  assert(not self.closed)
   self.closed = true
   uv_close(cast[ptr uv_handle_t](self.stream), freeStream)
   self.inputOther.sendClose(JustClose)
@@ -98,11 +105,14 @@ proc newUvPipe*[T](stream: ptr uv_stream_t, paused=false): T =
   (self.input, self.inputOther) = newInputOutputPair[byte]()
   (self.outputOther, self.output) = newInputOutputPair[byte]()
 
+  when not defined(release):
+    self.typeName = name(T)
   self.stream = stream
   self.paused = paused
   self.writeReq = cast[ptr uv_write_t](newUvReq(UV_WRITE))
 
   GC_ref(self)
+  assert stream.data == nil
   stream.data = cast[pointer](self)
   self.writeReq.data = cast[pointer](self)
 
