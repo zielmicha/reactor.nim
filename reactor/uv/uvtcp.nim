@@ -105,7 +105,7 @@ proc bindSocketForConnect*(bindHost: IpAddress, bindPort: int): Future[TcpBoundS
 
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), handle)
 
-  var sockaddress: SockAddr
+  var sockaddress: SockAddr_storage
   ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress),
                    bindHost,
                    bindPort)
