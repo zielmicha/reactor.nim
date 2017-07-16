@@ -66,8 +66,7 @@ proc gcSmallCollect() =
   when declared(GC_step):
     GC_step(1_000_000, strongAdvice=true)
   else:
-    static:
-      echo "[WARN] Using GC_fullCollect"
+    stderr.writeLine "[WARN] Using GC_fullCollect"
     GC_fullCollect()
 
   when defined(benchNoDelayGc):

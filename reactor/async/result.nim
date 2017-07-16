@@ -26,8 +26,10 @@ proc getOriginal*(exc: ref Exception): ref Exception =
 when debugFutures:
   template extInstantiationInfo(depth: int= -1): untyped =
     let frame = getFrame()
-    let info = instantiationInfo(depth - 1)
-    (info.filename, info.line, $frame.procname).InstantationInfo
+    # avoid leaking full paths
+    const filename = instantiationInfo(depth - 1).filename.split("/")[^1]
+    const line = instantiationInfo(depth - 1).line
+    (filename, line, $frame.procname).InstantationInfo
 
   proc getMeta(exc: ref Exception): ExceptionMeta =
     if exc of ExceptionMeta:

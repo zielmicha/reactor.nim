@@ -105,9 +105,11 @@ macro async*(a): untyped =
   let procNameStr = newStrLitNode($procNameStripped)
 
   if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future")):
+    returnTypeFull.treeRepr.echo
     error("invalid return type from async proc (expected Future[T])")
 
   let returnType = if returnTypeFull.kind == nnkEmpty: newIdentNode(!"void")
+                   elif returnTypeFull.kind == nnkCall: returnTypeFull[2]
                    else: returnTypeFull[1]
   let returnTypeNew = newNimNode(nnkBracketExpr)
   returnTypeNew.add newIdentNode(!"Future")
