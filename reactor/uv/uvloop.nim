@@ -54,6 +54,24 @@ proc stopLoop*() =
 proc disableFdInheritance*() =
   uv_disable_stdio_inheritance()
 
+# signals
+
+proc addSignalHandler*(signal: cint, callback: proc()) =
+  let handle = cast[ptr uv_signal_t](newUvHandle(UV_SIGNAL))
+  checkZero "signal_init", uv_signal_init(getThreadUvLoop(), handle)
+
+  type CallbackWrapper = ref object
+    callback: proc()
+
+  let wrapper = CallbackWrapper(callback: callback)
+  GC_ref(wrapper)
+  handle.data = cast[pointer](wrapper)
+
+  proc cb(handle: ptr uv_signal_t, signum: cint) {.cdecl.} =
+    cast[CallbackWrapper](handle.data).callback()
+
+  checkZero "signal_start", uv_signal_start(handle, cb, signal)
+
 # GC nodelay
 
 var gcNoDelayHandle {.threadvar.}: ptr uv_prepare_t

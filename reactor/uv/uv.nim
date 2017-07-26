@@ -110,7 +110,8 @@ type
     pid*: cint
   uv_fs_event_t* = pointer
   uv_fs_poll_t* = pointer
-  uv_signal_t* = pointer
+  uv_signal_t* = object
+    data*: pointer
   uv_req_t* = object
     data*: pointer
     `type`*: uv_req_type_arg

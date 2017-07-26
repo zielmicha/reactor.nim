@@ -182,6 +182,7 @@ proc onSuccessOrError*[T](f: Future[T], onSuccess: (proc(t:T)), onError: (proc(t
     return
 
   let c = f.completer
+  assert c != nil
   c.consumed = true
   if c.isFinished:
     onSuccessOrErrorR[T](c.result, onSuccess, onError)
@@ -330,6 +331,22 @@ proc waitForever*[T](t: typedesc[T]): Future[T] =
   ## Returns a future that never completes.
   let completer = newCompleter[T]()
   GC_ref(completer)
+  return completer.getFuture
+
+proc `or`*(a: Future[void], b: Future[void]): Future[void] =
+  # wait until one of the futures finishes
+  let completer = newCompleter[void]()
+
+  a.onSuccessOrError(proc(t: Result[void]) =
+                       if not completer.getFuture.isCompleted:
+                         completer.complete
+                         b.ignore)
+
+  b.onSuccessOrError(proc(t: Result[void]) =
+                       if not completer.getFuture.isCompleted:
+                         completer.complete
+                         a.ignore)
+
   return completer.getFuture
 
 proc runLoop*[T](f: Future[T]): T =
