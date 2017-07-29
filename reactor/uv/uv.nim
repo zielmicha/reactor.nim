@@ -33,9 +33,8 @@ type # TODO
     handle: pointer
     errmsg: cstring
 
-  # FIXME
-  uv_uid_t = cint
-  uv_gid_t = cint
+  uv_uid_t = cuint
+  uv_gid_t = cuint
 
 type
   uv_mutex_t = pointer

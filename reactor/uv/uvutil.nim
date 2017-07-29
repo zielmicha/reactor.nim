@@ -117,6 +117,11 @@ proc sockaddrToIpaddr*(address: ptr SockAddr): tuple[address: IpAddress, port: i
   else:
     raise newException(ValueError, "unknown address family")
 
+var FD_CLOEXEC* {.importc, header: "<fcntl.h>"}: cint
+
+proc setCloexec*(fd: cint, state: cint=1): cint {.importc: "uv__cloexec_fcntl", discardable.}
+proc dupCloexec*(fd: cint): cint {.importc: "uv__dup".}
+
 proc c_exit(errorcode: cint) {.importc: "exit", header: "<stdlib.h>".}
 
 template uvTopCallback*(c: untyped): untyped =

@@ -175,7 +175,7 @@ when not defined(windows):
   proc handleToFd(s: ptr uv_stream_t): cint =
     var fd: cint
     checkZero "uv_fileno", uv_fileno(cast[ptr uv_handle_t](s), addr fd)
-    result = dup(fd)
+    result = dupCloexec(fd)
     uv_close(cast[ptr uv_handle_t](s), freeUvMemory)
 
   proc connectTcpAsFd*(info: TcpConnectionData): Future[cint] =

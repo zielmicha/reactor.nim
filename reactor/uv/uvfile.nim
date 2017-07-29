@@ -49,24 +49,15 @@ when not defined(windows):
   import posix, reactor/syscall
 
   proc setBlocking*(fd: cint) =
-    var flags = fcntl(fd, F_GETFL, 0);
+    var flags = fcntl(fd, F_GETFL, 0)
     if flags == -1:
       raiseOSError(osLastError())
 
-    let r = fcntl(fd, F_SETFL, flags and (not O_NONBLOCK));
+    let r = fcntl(fd, F_SETFL, flags and (not O_NONBLOCK))
     if r == -1:
       raiseOSError(osLastError())
 
-  var O_CLOEXEC {.importc, header: "<fcntl.h>"}: cint
-
-  proc setCloexec*(fd: cint) =
-    var flags = fcntl(fd, F_GETFL, 0);
-    if flags == -1:
-      raiseOSError(osLastError())
-
-    let r = fcntl(fd, F_SETFL, flags and O_CLOEXEC);
-    if r == -1:
-      raiseOSError(osLastError())
+  export setCloexec, dupCloexec
 
   proc readAsync(fd: cint, buffer: pointer, size: int): Future[int] =
     return spawnSyscall(posix.read(fd, buffer, size))

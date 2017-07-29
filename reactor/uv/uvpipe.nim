@@ -14,7 +14,7 @@ proc streamFromFd*(fd: cint): BytePipe =
     checkZero "pipe_open", uv_pipe_open(pipe, fd.cint)
     return newUvPipe[FdPipe](cast[ptr uv_stream_t](pipe))
   else:
-    let inFd = dup(fd)
+    let inFd = dupCloexec(fd)
     return BytePipe(
       input: createInputFromFd(inFd),
       output: createOutputFromFd(fd),

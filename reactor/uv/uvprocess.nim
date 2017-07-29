@@ -26,7 +26,8 @@ proc startProcess*(command: seq[string],
                    environ: TableRef[string, string]=nil,
                    additionalEnv: openarray[tuple[k: string, v: string]]=[],
                    additionalFiles: openarray[tuple[target: cint, src: cint]]=[],
-                   pipeFiles: openarray[cint]=[]): Process =
+                   pipeFiles: openarray[cint]=[],
+                   detached=false, uid=0, gid=0): Process =
   ## Start a new process.
   var additionalFiles = @additionalFiles
   # TODO: leak
@@ -108,6 +109,13 @@ proc startProcess*(command: seq[string],
 
   result.options.stdio_count = result.stdioContainers.len.cint
   result.options.stdio = addr result.stdioContainers[0]
+  result.options.flags = (
+    (if detached: cuint(UV_PROCESS_DETACHED) else: 0) or
+    (if uid != 0: cuint(UV_PROCESS_SETUID) else: 0) or
+    (if gid != 0: cuint(UV_PROCESS_SETGID) else: 0)
+  )
+  result.options.uid = uid.cuint
+  result.options.gid = gid.cuint
 
   let res = uv_spawn(getThreadUvLoop(), process, addr result.options)
   result.pid = process.pid
