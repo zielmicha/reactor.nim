@@ -64,14 +64,19 @@ proc formatAsyncTrace(meta: ExceptionMeta): string =
 
 proc printError*(err: ref Exception) =
   let org = err.getOriginal()
-  stderr.writeLine err.getStackTrace
+  var msg =  err.getStackTrace & "\L"
   if err.getMeta() != nil:
-    stderr.writeLine "Asynchronous trace:"
-    stderr.writeLine formatAsyncTrace(err.getMeta())
+    msg &= "Asynchronous trace:\L"
+    msg &= formatAsyncTrace(err.getMeta()) & "\L"
   if org == nil:
-    stderr.writeLine "Error: unknown (original exception: " & (if err == nil: "nil" else: err.repr) & ")"
+    msg &= "Error: unknown (original exception: " & (if err == nil: "nil" else: err.repr) & ")\L"
   else:
-    stderr.writeLine "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]"
+    msg &= "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]\L"
+
+  if errorMessageWriter != nil:
+    errorMessageWriter(msg)
+  else:
+    stderr.write msg
 
 proc isError*[T](r: Result[T]): bool =
   return not r.isSuccess
