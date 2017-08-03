@@ -109,7 +109,7 @@ proc ipaddrToSockaddr*(address: ptr SockAddr, ip: IpAddress, port: int) =
 proc sockaddrToIpaddr*(address: ptr SockAddr): tuple[address: IpAddress, port: int] =
   if address.sa_family == AF_INET:
      var a = cast[ptr Sockaddr_in](address)
-     return (a.sin_addr.s_addr.ipAddress.from4, a.sin_port.int) # FIXME: htons?
+     return (a.sin_addr.s_addr.ipAddress.from4, htons(a.sin_port).int)
   elif address.sa_family == AF_INET6:
     var a = cast[ptr Sockaddr_in6](address)
     let address = a.sin6_addr.s6_addr.ipAddress.from6
