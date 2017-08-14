@@ -49,7 +49,14 @@ proc `$`*[T](c: Future[T]): string =
   "Future " & makeInfo(c)
 
 proc `$`*[T](c: Completer[T]): string =
-  "Completer " & makeInfo(c.getFuture)
+  var listenerCount = 0
+  if not c.isFinished and c.callback != nil:
+    listenerCount = 1
+    var curr = c.callbackList
+    while curr != nil:
+      listenerCount += 1
+      curr = curr.next
+  return "Completer $1 listener-count: $2" % [makeInfo(c.getFuture), $listenerCount]
 
 proc getFuture*[T](c: Completer[T]): Future[T] =
   ## Retrieves a Future managed by the Completer.
@@ -78,7 +85,7 @@ proc newCompleter*[T](): Completer[T] =
     result.stackTrace = getStackTrace()
 
 proc addCallback[T](c: Completer[T], cb: FutureCallback[T]) =
-  if c.callback != nil:
+  if c.callback == nil:
     c.callback = cb
   else:
     let newList = CallbackList[T](callback: cb, next: c.callbackList)

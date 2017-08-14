@@ -8,8 +8,8 @@ type
 proc iterFuture[T](f: Future[T]): AsyncIterator =
   let completer = f.completer
   result.callback = proc(cont: proc()) =
-    completer.callback = proc(data: RootRef, future: Completer[T]) =
-      cont()
+    completer.addCallback(proc(data: RootRef, future: Completer[T]) =
+      cont())
 
 template stopAsync*(): typed =
   # we will never be called again
