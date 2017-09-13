@@ -139,3 +139,30 @@ proc waitForSuccess*(process: Process): Future[void] =
 proc detach*(process: Process) =
   # TODO
   discard
+
+# utility functions
+
+proc runProcess*(command: seq[string],
+                 environ: TableRef[string, string]=nil,
+                 additionalEnv: openarray[tuple[k: string, v: string]]=[],
+                 additionalFiles: openarray[tuple[target: cint, src: cint]]=[],
+                 pipeFiles: openarray[cint]=[],
+                 detached=false, uid=0, gid=0): Future[void] =
+  let p = startProcess(
+    command = command,
+    environ = environ,
+    additionalFiles = additionalFiles,
+    additionalEnv = additionalEnv,
+    pipeFiles = pipeFiles,
+    detached = detached, uid = uid, gid = gid)
+  return p.waitForSuccess
+
+proc checkOutput*(command: seq[string],
+                  environ: TableRef[string, string]=nil,
+                  additionalEnv: seq[tuple[k: string, v: string]] = @[]): Future[string] {.async.} =
+  let p =
+    startProcess(command=command, environ = environ, additionalEnv = additionalEnv, pipeFiles = @[4.cint])
+
+  let reader = p.files[0].input.readUntilEof
+  await p.waitForSuccess
+  return reader

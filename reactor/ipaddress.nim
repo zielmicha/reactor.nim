@@ -26,7 +26,7 @@ type
 
 proc toBinaryString*(s: Ip4Address | Ip6Address): string =
   ## Converts IP address to its binary representation.
-  const size = s.high - s.low + 1
+  const size = when s is Ip4Address: 4 else: 16
   result = newString(size)
   copyMem(result.cstring, unsafeAddr(s), size)
 
@@ -73,6 +73,14 @@ converter from4*(a: Ip4Address): IpAddress =
 converter from6*(a: Ip6Address): IpAddress =
   result.kind = ip6
   result.ip6 = a
+
+proc ipFromBinaryString*(s: string): IpAddress =
+  if s.len == 4:
+    return byteArray(s, 4).Ip4Address
+  elif s.len == 16:
+    return byteArray(s, 16).Ip6Address
+  else:
+    raise newException(ValueError, "bad binary IP length")
 
 proc `[]`*(a: Ip4Address, index: int): uint8 = array[4, uint8](a)[index]
 proc `[]`*(a: Ip6Address, index: int): uint8 = array[16, uint8](a)[index]

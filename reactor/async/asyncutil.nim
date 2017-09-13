@@ -155,6 +155,33 @@ proc zip*(a: seq[Future[void]]): Future[void] =
 
   return completer.getFuture
 
+proc any*[T](futures: seq[Future[T]]): Future[T] =
+  ## Wait until one of the futures finishes successfully.
+  ## If all of the futures fail, return an error.
+  var futures = futures
+  let completer = newCompleter[void]()
+  var remaining = futures.len
+
+  proc callback(num: int): proc() =
+    return proc(r: Result[T]) =
+             if not completer.getFuture.isCompleted:
+               if r.isError:
+                 remaining -= 1
+                 if remaining == 0:
+                   completer.complete(r)
+               else:
+                 completer.complete(r)
+
+               for i, fut in futures:
+                 if i != num:
+                   fut.ignore
+               futures = nil # GC
+
+  for i, fut in futures:
+    fut.onSuccessOrError(callback(i))
+
+  return completer.getFuture
+
 proc splitFuture*[A, B](f: Future[tuple[a: A, b: B]]): tuple[a: Future[A], b: Future[B]] =
   ## Converts a future of tuple to tuple of futures.
   let ca = newCompleter[A]()

@@ -370,6 +370,9 @@ proc runLoop*[T](f: Future[T]): T =
 
   f.get
 
+proc waitFor*[T](f: Future[T]): T =
+  f.runLoop
+
 proc runMain*(f: Future[void]) =
   ## Run the event loop until Future `f` completes, return the value. If the Future completes with an error, print pretty stack trace and quit.
   try:

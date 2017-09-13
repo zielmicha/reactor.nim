@@ -44,6 +44,9 @@ proc newUdpSocket*(): UdpSocket =
 
   return socket
 
+proc send*(self: UdpSocket, dest: tuple[address: IpAddress, port: int], data: string): Future[void] =
+  self.output.send(UdpPacket(dest: dest, data: data))
+
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
   buf.base = alloc0(suggestedSize)
   buf.len = suggestedSize
