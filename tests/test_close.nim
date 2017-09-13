@@ -1,6 +1,5 @@
 # TEST.
-discard """closing stream
-|hello world|
+discard """|hello world|
 error(just close)
 will now exit"""
 import reactor/tcp, reactor/loop, reactor/async, reactor/util, reactor/ipaddress, reactor/time

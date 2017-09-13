@@ -3,7 +3,7 @@ import macros, sequtils
 
 type
   AsyncIterator* = object
-    callback: proc(cont: proc())
+    callback*: proc(cont: proc())
 
 proc iterFuture[T](f: Future[T]): AsyncIterator =
   let completer = f.completer
@@ -54,12 +54,21 @@ template tryAwait*(body: typed): untyped =
 #   {.error: "await outside of an async proc".}
 #   discard
 
-proc asyncIteratorRun*(it: (iterator(): AsyncIterator)) =
-  var asyncIter = it()
-  if finished(it):
-    return
-  if asyncIter.callback != nil:
-    asyncIter.callback(proc() = asyncIteratorRun(it))
+
+template declAsyncIteratorRun(procName, asyncRaise) =
+  proc `procName AsyncIterator`(it: (iterator(): AsyncIterator)) =
+    var asyncIter: AsyncIterator
+    try:
+      asyncIter = it()
+    except:
+      asyncRaise getCurrentException()
+
+    if finished(it):
+      return
+    if asyncIter.callback != nil:
+      asyncIter.callback(proc() = `procName AsyncIterator`(it))
+
+  template asyncIteratorRun(it) = `procName AsyncIterator`(it)
 
 proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
   if n.kind in RoutineNodes:
@@ -157,6 +166,7 @@ macro async*(a): untyped =
 
     let iter: (iterator(): AsyncIterator) = `innerIteratorName`
 
+    declAsyncIteratorRun(`procNameStripped`, asyncRaise)
     asyncIteratorRun(iter)
     return asyncProcCompleter.getFuture
 
@@ -229,6 +239,8 @@ macro asyncIterator*(a): untyped =
   let body = a[6]
   let returnTypeFull = a[3][0]
 
+  let procNameStripped = if procName.kind == nnkPostfix: procName[1] else: procName
+
   if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Input"):
     error("invalid return type from async iterator (expected Input[T])")
 
@@ -260,6 +272,7 @@ macro asyncIterator*(a): untyped =
       `body`
       asyncRaise(JustClose)
 
+    declAsyncIteratorRun(`procNameStripped`, asyncRaise)
     asyncIteratorRun(iter)
     return asyncStream
 

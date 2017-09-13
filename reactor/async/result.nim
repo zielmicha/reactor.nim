@@ -68,6 +68,11 @@ proc printError*(err: ref Exception) =
   if err.getMeta() != nil:
     msg &= "Asynchronous trace:\L"
     msg &= formatAsyncTrace(err.getMeta()) & "\L"
+
+  let originalStacktrace = org.getStackTrace
+  if originalStacktrace != nil and originalStacktrace != "":
+    msg &= "Original trace:\L" & originalStacktrace.split('\L', maxsplit=1)[1] & "\L"
+
   if org == nil:
     msg &= "Error: unknown (original exception: " & (if err == nil: "nil" else: err.repr) & ")\L"
   else:
