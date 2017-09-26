@@ -208,7 +208,7 @@ proc onSuccessOrError*(f: Future[void], function: (proc(t: Result[void]))) =
 
 proc onSuccessOrError*[T](f: Future[T], function: (proc(t: Result[T]))) =
   onSuccessOrError(f,
-    (proc(t: T) = function(just(t))),
+    (proc(t: T) = function(when T is void: just() else: just(t))),
     proc(exc: ref Exception) = function(error(T, exc)))
 
 proc onError*(f: Future[Bottom], onError: (proc(t: ref Exception))) =
