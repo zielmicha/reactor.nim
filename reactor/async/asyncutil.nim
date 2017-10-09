@@ -140,7 +140,7 @@ proc zip*[A](a: seq[Future[A]]): Future[seq[A]] {.async.} =
     res.add(tryAwait item)
   return res
 
-proc zip*(a: seq[Future[void]]): Future[void] =
+proc zipVoid*(a: seq[Future[void]]): Future[void] =
   let completer = newCompleter[void]()
   var waiting = a.len
   for f in a:
@@ -202,7 +202,7 @@ proc unwrapPipeFuture*[T](f: Future[Pipe[T]]): Pipe[T] =
 proc pipe*[T](a: Pipe[T], b: Pipe[T]): Future[void] =
   let f1 = pipe(a.input, b.output)
   let f2 = pipe(b.input, a.output)
-  return zip(@[f1, f2])
+  return zipVoid(@[f1, f2])
 
 proc asyncPipe*[T](f: proc(s: Input[T]): Future[void]): Output[T] =
   ## Create a new pipe, return output side. Call `f` in background with input as an argument
