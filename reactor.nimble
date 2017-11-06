@@ -1,6 +1,6 @@
 [Package]
 name          = "reactor"
-version       = "0.4.3"
+version       = "0.4.4"
 author        = "Michał Zieliński <michal@zielinscy.org.pl>"
 description   = "Asynchronous networking engine for Nim"
 license       = "MIT"
