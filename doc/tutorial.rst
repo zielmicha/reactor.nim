@@ -17,7 +17,7 @@ Hello world
   import reactor
 
   proc main(): Future[void] =
-    return asyncSleep(1000).then(() => "world").then(who => echo "hello " & who)
+    return asyncSleep(1000).then(() => "world").then(proc(who: string) = echo "hello " & who)
 
   when isMainModule:
     # Use runMain to start the event loop
@@ -68,7 +68,7 @@ Reactor has support for making HTTP requests.
 
   proc main() {.async.} =
     # fetch Google page
-    let resp = await request(newHttpRequest(httpMethod="GET", url="http://google.com"))
+    let resp = await request(newHttpRequest(httpMethod="GET", url="http://google.com").get)
     # read all data
     let data = await resp.dataInput.readUntilEof()
     echo data
