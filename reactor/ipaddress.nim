@@ -285,11 +285,11 @@ proc `+`*(i: IpAddress, k: int64): IpAddress =
     var target = array[length, uint8](address)
     var sign = if k >= 0: 1 else: -1
     k = abs(k)
-    var overflow = 0
+    var overflow: int64 = 0
     for jj in 0..<length:
       let j = length - jj - 1
       let val = target[j].int + (k and 0xFF) * sign + overflow
-      target[j] = val and 0xFF
+      target[j] = uint8(val and 0xFF)
       overflow = val shr 8
       k = k shr 8
 
