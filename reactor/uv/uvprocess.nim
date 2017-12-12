@@ -27,7 +27,7 @@ proc startProcess*(command: seq[string],
                    additionalEnv: openarray[tuple[k: string, v: string]]=[],
                    additionalFiles: openarray[tuple[target: cint, src: cint]]=[],
                    pipeFiles: openarray[cint]=[],
-                   detached=false, uid=0, gid=0): Process =
+                   detached=false, uid: uint32=0, gid: uint32=0): Process =
   ## Start a new process.
   var additionalFiles = @additionalFiles
   # TODO: leak
@@ -147,7 +147,7 @@ proc runProcess*(command: seq[string],
                  additionalEnv: openarray[tuple[k: string, v: string]]=[],
                  additionalFiles: openarray[tuple[target: cint, src: cint]]=[],
                  pipeFiles: openarray[cint]=[],
-                 detached=false, uid=0, gid=0): Future[void] =
+                 detached=false, uid: uint32=0, gid: uint32=0): Future[void] =
   let p = startProcess(
     command = command,
     environ = environ,
