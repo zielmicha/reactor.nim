@@ -155,7 +155,7 @@ proc zipVoid*(a: seq[Future[void]]): Future[void] =
 
   return completer.getFuture
 
-proc any*[T](futures: seq[Future[T]]): Future[T] =
+proc anyFuture*[T](futures: seq[Future[T]]): Future[T] =
   ## Wait until one of the futures finishes successfully.
   ## If all of the futures fail, return an error.
   var futures = futures
