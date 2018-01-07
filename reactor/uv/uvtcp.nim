@@ -58,7 +58,7 @@ proc getSockAddr*(conn: TcpServer): auto =
 proc initClient(t: typedesc[TcpConnection]): ptr uv_tcp_t =
   result = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), result)
-  checkZero "tcp_nodelay", uv_tcp_nodelay(result, 0)
+  checkZero "tcp_nodelay", uv_tcp_nodelay(result, 1)
 
 proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Future[TcpServer] =
   let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
