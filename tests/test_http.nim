@@ -15,7 +15,8 @@ proc main() {.async.} =
                    path="/", host=nil))
   let resp = await conn.readResponse(expectingBody=true)
   echo resp
-  echo(await resp.dataInput.readSome(1000))
+  let resp1 = await resp.dataInput.readSome(1000)
+  echo(resp1)
   discard await resp.dataInput.readUntilEof()
   echo "ok"
 
@@ -23,8 +24,8 @@ proc main() {.async.} =
     newHttpRequest(httpMethod="GET",
                    path="/foo", host=nil))
 
-  let resp1 = await conn.readResponse(expectingBody=true)
-  echo resp1
+  let resp2 = await conn.readResponse(expectingBody=true)
+  echo resp2
 
 when isMainModule:
   main().runMain()

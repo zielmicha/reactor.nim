@@ -8,7 +8,7 @@ discard """@[5, 6]
 Error in ignored future
 
 Asynchronous trace:
-test_streams_close.nim(44) test3
+test_streams_close.nim(47) test3
 
 Error: reader closed [Exception]"""
 
@@ -21,7 +21,8 @@ proc test1() {.async.} =
   await output.send(6)
   output.sendClose(JustClose)
 
-  (await input.receiveAll(2)).echo
+  let res = (await input.receiveAll(2))
+  res.echo
 
 proc test2() {.async.} =
   let (input, output) = newInputOutputPair[int]()
@@ -30,8 +31,10 @@ proc test2() {.async.} =
   await output.send(6)
   output.sendClose(JustClose)
 
-  (await input.receiveAll(1)).echo
-  (await input.receiveSome(10)).echo
+  let res = (await input.receiveAll(1))
+  res.echo
+  let res1 = (await input.receiveSome(10))
+  res1.echo
 
 proc test3() {.async.} =
   let (stream, output) = newInputOutputPair[int]()

@@ -7,6 +7,7 @@ import os
 os.chdir(os.path.dirname(__file__)); os.chdir('..')
 
 for name in glob.glob('tests/*.nim'):
+    if 'flycheck_' in name: continue
     lines = open(name).read().splitlines()
     if not (lines and lines[0].startswith('# TEST.')):
         if lines and ('disabled' not in lines[0]):

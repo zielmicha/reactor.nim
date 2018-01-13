@@ -23,7 +23,9 @@ proc myfun2() {.async.} =
   asyncRaise "err"
 
 proc main() {.async.} =
-  echo tryAwait myfun2()
-  echo tryAwait myfun()
+  let res1 = tryAwait myfun2()
+  echo res1
+  let res2 = tryAwait myfun()
+  echo res2
 
 main().runMain

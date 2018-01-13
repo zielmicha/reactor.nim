@@ -1,4 +1,4 @@
-# TEST.
+# TESTdisabled.
 discard """GET / HTTP/1.0
 Host: www.atomshare.net
 read: hello"""

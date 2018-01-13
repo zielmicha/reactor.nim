@@ -3,7 +3,8 @@ import reactor, reactor/unix
 proc handleServer(s: UnixServer) {.async.} =
   asyncFor conn in s.incomingConnections:
     echo "got connection"
-    echo(await conn.input.read(10))
+    let res = await conn.input.read(10)
+    echo res
     conn.input.recvClose JustClose
     conn.output.sendClose JustClose
 
@@ -16,7 +17,8 @@ proc main() {.async.} =
 
   let conn2 = await connectUnix("/tmp/unix123")
   await conn2.output.write("hello world")
-  echo "read:", tryAwait conn2.input.readSome(maxCount=100)
+  let res = tryAwait conn2.input.readSome(maxCount=100)
+  echo "read:", res
 
 when isMainModule:
   main().runMain
