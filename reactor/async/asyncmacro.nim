@@ -84,10 +84,12 @@ proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
     # normal defer appears to work, but is called when iterator yields, not when it exits!
     return newCall(newIdentNode(!"asyncDefer"), n[0])
 
-  let node = n.copyNimTree
+  let node = n
   for i in 0..<node.len:
     node[i] = transformAsyncBody(n[i])
   return node
+
+var t: float
 
 macro async*(a): untyped =
   ## `async` macro. Enables you to write asynchronous code in a similar manner to synchronous code.
@@ -95,9 +97,8 @@ macro async*(a): untyped =
   ## For example:
   ## ```
   ## proc add5(s: Future[int]): Future[int] {.async.} =
-  ##   asyncReturn((await s) + 5)
+  ##   return (await s) + 5
   ## ```
-
   var a = a
   if a.kind == nnkStmtList:
     if a.len != 1: error("expected exactly one function")
@@ -107,7 +108,7 @@ macro async*(a): untyped =
   let allParams = toSeq(a[3].items)
   let params = if allParams.len > 0: allParams[1..<allParams.len] else: @[]
   let pragmas = a[4]
-  let body = transformAsyncBody(a[6])
+  let body = transformAsyncBody(a[6].copyNimTree)
   let returnTypeFull = a[3][0]
 
   let procNameStripped = if procName.kind == nnkPostfix: procName[1] else: procName
