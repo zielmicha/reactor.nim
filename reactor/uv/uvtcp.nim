@@ -60,6 +60,12 @@ proc initClient(t: typedesc[TcpConnection]): ptr uv_tcp_t =
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), result)
   checkZero "tcp_nodelay", uv_tcp_nodelay(result, 1)
 
+
+let localhostAddresses = @[
+  parseAddress("127.0.0.1"),
+  parseAddress("::1"),
+]
+
 proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Future[TcpServer] =
   let server = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), server)
@@ -89,7 +95,10 @@ proc createTcpServer*(port: int, addresses: seq[IpAddress], reusePort=false): Fu
 
   return now(just(serverObj))
 
-proc createTcpServer*(port: int, host="localhost", reusePort=false): Future[TcpServer] =
+proc createTcpServer*(port: int, reusePort=false): Future[TcpServer] =
+  return createTcpServer(port, localhostAddresses, reusePort)
+
+proc createTcpServer*(port: int, host: string, reusePort=false): Future[TcpServer] =
   ## Create TcpServer listening on `host`:`port`.
   ##
   ## Example:
