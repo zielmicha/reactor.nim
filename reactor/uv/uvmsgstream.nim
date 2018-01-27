@@ -2,8 +2,8 @@ import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/errno
 import reactor/async, reactor/util, collections/views
 
 type MsgPipe* = ref object of Pipe[string]
-  inputProvider: Provider[string]
-  outputStream: Input[string]
+  mOutput: Output[string]
+  mInput: Input[string]
   stream*: ptr uv_stream_t
   buffer: string
   writeReq: ptr uv_write_t
@@ -15,13 +15,13 @@ type MsgPipe* = ref object of Pipe[string]
 proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
   let self = cast[MsgPipe](stream.data)
 
-  if self.inputProvider.freeBufferSize == 1:
+  if self.mOutput.freeBufferSize == 1:
     checkZero "read_stop", uv_read_stop(stream)
     if nread == UV_ENOBUFS:
       return
 
   if nread < 0:
-    self.inputProvider.sendClose(uvError(nread, "read stream"))
+    self.mOutput.sendClose(uvError(nread, "read stream"))
   else:
     if self.sendClosed:
       return
@@ -29,7 +29,7 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
     assert nread <= self.buffer.len
     var data = self.buffer[0..<nread]
     data.shallow
-    let provided = self.inputProvider.provideSome(singleItemView(data))
+    let provided = self.mOutput.sendSome(singleItemView(data))
     assert provided == 1
 
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
@@ -47,19 +47,19 @@ proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
   let self = cast[MsgPipe](req.data)
 
   if status < 0:
-    self.inputProvider.sendClose(uvError(status, "stream write"))
+    self.mOutput.sendClose(uvError(status, "stream write"))
     self.sendClosed = true
   else:
-    self.outputStream.discardItems(1)
+    self.mInput.discardItems(1)
     self.writeReady()
 
 proc writeReady(self: MsgPipe) =
-  let waiting = self.outputStream.peekMany()
+  let waiting = self.mInput.peekMany()
 
   if waiting.len == 0:
-    self.outputStream.onRecvReady.addListener proc() = self.writeReady()
+    self.mInput.onRecvReady.addListener proc() = self.writeReady()
   else:
-    self.outputStream.onRecvReady.removeAllListeners
+    self.mInput.onRecvReady.removeAllListeners
 
     self.writingNow = uv_buf_t(base: waiting[0].cstring, len: waiting[0].len)
     checkZero "write", uv_write(self.writeReq, self.stream, addr self.writingNow, 1, writeCb)
@@ -70,8 +70,8 @@ proc resume*(self: MsgPipe) =
 proc newMsgPipe*(fileno: cint): MsgPipe =
   # TODO: onClose!!!
   let self = new(MsgPipe)
-  (self.input, self.inputProvider) = newInputOutputPair[string]()
-  (self.outputStream, self.output) = newInputOutputPair[string]()
+  (self.mInput, self.output) = newInputOutputPair[string]()
+  (self.input, self.mOutput) = newInputOutputPair[string]()
 
   self.stream = cast[ptr uv_stream_t](newUvHandle(UV_TTY))
   checkZero "tty_init", uv_tty_init(getThreadUvLoop(), cast[ptr uv_tty_t](self.stream), fileno, 1.cint)
@@ -85,9 +85,9 @@ proc newMsgPipe*(fileno: cint): MsgPipe =
 
   self.recvStart()
 
-  self.inputProvider.onSendReady.addListener proc() =
+  self.mOutput.onSendReady.addListener proc() =
     self.recvStart()
 
-  self.outputStream.onRecvReady.addListener proc() = self.writeReady()
+  self.mInput.onRecvReady.addListener proc() = self.writeReady()
 
   return self
