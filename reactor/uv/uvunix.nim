@@ -7,9 +7,9 @@ import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, reactor/uv/errno, 
 type
   UnixConnection* = ref object of uvstream.UvPipe
 
-  UnixServer* = ref object
-    incomingConnections*: Input[UnixConnection]
-    incomingConnectionsProvider: Output[UnixConnection]
+  UnixServer* = ref object of Server[UnixServer, UnixConnection]
+
+export incomingConnections, accept, acceptAsFd
 
 proc connectUnix*(path: string): Future[UnixConnection] =
   ## Connect to TCP server running on host:port.

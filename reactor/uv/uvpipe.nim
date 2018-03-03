@@ -19,3 +19,7 @@ proc streamFromFd*(fd: cint): BytePipe =
       input: createInputFromFd(inFd),
       output: createOutputFromFd(fd),
     )
+
+proc closeFd*(fd: cint) =
+  if close(fd) != 0:
+    raiseOSError(osLastError())

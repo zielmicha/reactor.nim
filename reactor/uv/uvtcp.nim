@@ -13,9 +13,7 @@ else:
   import posix
 
 type
-  TcpServer* = ref object
-    incomingConnections*: Input[TcpConnection]
-    incomingConnectionsProvider: Output[TcpConnection]
+  TcpServer* = ref object of uvlisten.Server[TcpServer, TcpConnection]
     sockAddr: tuple[address: IpAddress, port: int]
 
   TcpConnection* = ref object of uvstream.UvPipe
@@ -33,7 +31,14 @@ type
   TcpBoundSocket* = ref object
     stream: ptr uv_tcp_t
 
-export UvStream
+export UvStream, incomingConnections, acceptAsFd, accept, close
+
+proc getPeerAddr*(fd: cint): tuple[address: IpAddress, port: int] =
+  ## Get address of a remote peer (similar to POSIX getpeername).
+  var name: SockAddr_storage
+  var length = sizeof(name).Socklen
+  checkZero "getpeername", getpeername(SocketHandle(fd), cast[ptr SockAddr](addr name), addr length)
+  return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
 proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
   ## Get address of a remote peer (similar to POSIX getpeername).
@@ -59,7 +64,6 @@ proc initClient(t: typedesc[TcpConnection]): ptr uv_tcp_t =
   result = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), result)
   checkZero "tcp_nodelay", uv_tcp_nodelay(result, 1)
-
 
 let localhostAddresses = @[
   parseAddress("127.0.0.1"),
@@ -183,12 +187,6 @@ proc connectTcp*(host: IpAddress, port: int): Future[TcpConnection] =
 
 when not defined(windows):
   import posix
-
-  proc handleToFd(s: ptr uv_stream_t): cint =
-    var fd: cint
-    checkZero "uv_fileno", uv_fileno(cast[ptr uv_handle_t](s), addr fd)
-    result = dupCloexec(fd)
-    uv_close(cast[ptr uv_handle_t](s), freeUvMemory)
 
   proc connectTcpAsFd*(info: TcpConnectionData): Future[cint] =
     ## Connect to TCP server running on host:port.

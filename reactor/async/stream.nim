@@ -53,6 +53,9 @@ proc newPipe*[T](input: BufferedInput[T], output: BufferedOutput[T]): Pipe[T] =
   result.input = input
   result.output = output
 
+proc newPipe*[T](t: tuple[input: BufferedInput[T], output: BufferedOutput[T]]): Pipe[T] =
+  return newPipe(t.input, t.output)
+
 proc newInputOutputPair*[T](bufferSize=0): tuple[input: BufferedInput[T], output: BufferedOutput[T]] =
   ## Create a new stream/provider pair. Proving values to ``provider`` will make them available on ``stream``.
   ## If more than ``bufferSize`` items are provided without being consumed by stream, ``provide`` operation blocks.

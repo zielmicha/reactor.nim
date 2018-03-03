@@ -131,3 +131,9 @@ template uvTopCallback*(c: untyped): untyped =
     echo "Error occured inside the event loop: ", getCurrentExceptionMsg()
     echo getCurrentException().getStackTrace
     c_exit(1)
+
+proc handleToFd*(s: ptr uv_stream_t): cint =
+  var fd: cint
+  checkZero "uv_fileno", uv_fileno(cast[ptr uv_handle_t](s), addr fd)
+  result = dupCloexec(fd)
+  uv_close(cast[ptr uv_handle_t](s), freeUvMemory)
