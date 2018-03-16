@@ -9,7 +9,8 @@ proc main() {.async.} =
   # resp.dataInput is of type ByteInput
   let body = resp.dataInput
   # read first 10 bytes of body
-  echo (await body.read(10))
+  let d = (await body.read(10))
+  echo d
 
 when isMainModule:
   # Use runMain to start the event loop
