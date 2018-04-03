@@ -76,13 +76,13 @@ proc transformAsyncBody(n: NimNode): NimNode {.compiletime.} =
 
   if n.kind == nnkReturnStmt:
     if n[0].kind == nnkEmpty:
-      return newCall(newIdentNode(!"asyncReturn"))
+      return newCall(newIdentNode("asyncReturn"))
     else:
-      return newCall(newIdentNode(!"asyncReturn"), n[0])
+      return newCall(newIdentNode("asyncReturn"), n[0])
 
   if n.kind == nnkDefer:
     # normal defer appears to work, but is called when iterator yields, not when it exits!
-    return newCall(newIdentNode(!"asyncDefer"), n[0])
+    return newCall(newIdentNode("asyncDefer"), n[0])
 
   let node = n
   for i in 0..<node.len:
@@ -114,15 +114,15 @@ macro async*(a): untyped =
   let procNameStripped = if procName.kind == nnkPostfix: procName[1] else: procName
   let procNameStr = newStrLitNode($procNameStripped)
 
-  if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Future")):
+  if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode("Future")):
     returnTypeFull.treeRepr.echo
     error("invalid return type from async proc (expected Future[T])")
 
-  let returnType = if returnTypeFull.kind == nnkEmpty: newIdentNode(!"void")
+  let returnType = if returnTypeFull.kind == nnkEmpty: newIdentNode("void")
                    elif returnTypeFull.kind == nnkCall: returnTypeFull[2]
                    else: returnTypeFull[1]
   let returnTypeNew = newNimNode(nnkBracketExpr)
-  returnTypeNew.add newIdentNode(!"Future")
+  returnTypeNew.add newIdentNode("Future")
   returnTypeNew.add returnType
 
   let completer = parseExpr("newCompleter[int]()")
@@ -203,7 +203,7 @@ macro asyncFor*(iterClause: untyped, body: untyped): untyped =
   ##     echo "piping ", item
   ##     await dst.send(item)
   ## ```
-  if iterClause.kind != nnkInfix or iterClause[0] != newIdentNode(!"in"):
+  if iterClause.kind != nnkInfix or iterClause[0] != newIdentNode("in"):
     error("expected `x in y` after for")
 
   let coll = iterClause[2]
@@ -242,7 +242,7 @@ macro asyncIterator*(a): untyped =
 
   let procNameStripped = if procName.kind == nnkPostfix: procName[1] else: procName
 
-  if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode(!"Input"):
+  if returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode("Input"):
     error("invalid return type from async iterator (expected Input[T])")
 
   let returnType = returnTypeFull[1]
