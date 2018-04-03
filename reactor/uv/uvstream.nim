@@ -110,6 +110,7 @@ proc newUvPipe*[T](stream: ptr uv_stream_t, paused=false): T =
   self.stream = stream
   self.paused = paused
   self.writeReq = cast[ptr uv_write_t](newUvReq(UV_WRITE))
+  # TODO: writeReq leaks
 
   GC_ref(self)
   assert stream.data == nil

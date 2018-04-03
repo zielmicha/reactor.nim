@@ -60,7 +60,7 @@ proc getSockAddr*(conn: TcpBoundSocket | TcpConnection): tuple[address: IpAddres
 proc getSockAddr*(conn: TcpServer): auto =
   return conn.sockAddr
 
-proc initClient(t: typedesc[TcpConnection]): ptr uv_tcp_t =
+proc initClient(self: TcpServer): ptr uv_tcp_t =
   result = cast[ptr uv_tcp_t](newUvHandle(UV_TCP))
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), result)
   checkZero "tcp_nodelay", uv_tcp_nodelay(result, 1)

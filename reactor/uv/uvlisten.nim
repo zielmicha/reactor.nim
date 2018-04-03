@@ -30,7 +30,7 @@ proc onNewConnection*[ServerType, ConnType](server: ptr uv_stream_t; status: cin
   let self = cast[ServerType](server.data)
 
   mixin initClient
-  var client = initClient(ConnType)
+  var client = initClient(self)
   let err = uv_accept(server, cast[ptr uv_stream_t](client))
   if err != 0:
     echo "Error: failed to accept connection" # FIXME: memory leak etc
