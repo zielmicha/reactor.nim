@@ -189,8 +189,6 @@ proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
 
   return completer.getFuture
 
-{.deprecated: [provide: send, provideAll: sendAll, provideSome: sendSome].}
-
 proc sendClose*(self: BufferedOutput, exc: ref Exception) =
   ## Closes the output stream -- signals that no more items will be provided.
   if sself.sendClosed: return

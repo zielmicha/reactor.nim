@@ -12,6 +12,6 @@ proc simplePipe(src: Input[int]) {.async.} =
    echo "here"
 
 let (s, p) = newInputOutputPair[int]()
-p.provideAll(@[1, 2, 3]).then(() => p.sendClose(JustClose)).ignore
+p.sendAll(@[1, 2, 3]).then(() => p.sendClose(JustClose)).ignore
 
 simplePipe(s).runLoop()

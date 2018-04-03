@@ -6,7 +6,7 @@ proc main() {.async.} =
 
   let destAddr = await resolveSingleAddress("localhost")
   let client = newUdpSocket()
-  await client.output.provide(UdpPacket(data: "hello", dest: (destAddr, 9060)))
+  await client.output.send(UdpPacket(data: "hello", dest: (destAddr, 9060)))
 
   let pkt = await server.input.receive()
   echo "recv ", pkt.data
