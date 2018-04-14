@@ -95,8 +95,8 @@ proc sendFd*(self: UnixConnection, fd: cint, message: string): Future[void] =
   GC_ref(msg)
 
   proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
-    freeUvMemory(cast[ptr uv_handle_t](req))
     GC_unref(cast[ref string](req.data))
+    freeUvMemory(cast[ptr uv_handle_t](req))
 
   let writeReq = cast[ptr uv_write_t](newUvReq(UV_WRITE))
   writeReq.data = cast[pointer](msg)
