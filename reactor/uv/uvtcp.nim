@@ -192,6 +192,10 @@ when not defined(windows):
     ## Connect to TCP server running on host:port.
     return connectTcpAsHandle(info).then(handleToFd)
 
+  proc connectTcpAsFd*(host: IpAddress, port: int): Future[cint] =
+    ## Connect to TCP server running on host:port.
+    return connectTcpAsFd(TcpConnectionData(host: host, port: port))
+
 proc connectTcp*(host: string, port: int): Future[TcpConnection] {.async.} =
   ## Connect to TCP server running on host:port.
   let addresses = await resolveAddress(host)
