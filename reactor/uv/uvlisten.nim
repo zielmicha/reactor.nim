@@ -37,7 +37,7 @@ proc onNewConnection*[ServerType, ConnType](server: ptr uv_stream_t; status: cin
     return
 
   var clientV = cast[ptr uv_stream_t](client)
-  let p = self.connections.output.sendSome singleItemView(clientV)
+  let p = self.connections.output.sendSome unsafeInitView(addr clientV, 1)
   if p != 1:
     echo "Error: TCP connection buffer full"
     uv_close(cast[ptr uv_handle_t](client), freeUvMemory)

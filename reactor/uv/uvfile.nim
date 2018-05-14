@@ -71,7 +71,7 @@ when not defined(windows):
     let (input, output) = newInputOutputPair[byte]()
 
     proc piper() {.async.} =
-      var buffer = newString(40960)
+      var buffer = newView(byte, 40960)
       setBlocking(fd)
       defer: discard close(fd)
       while true:
@@ -81,7 +81,7 @@ when not defined(windows):
         assert count >= 0
         if count == 0:
           break
-        let sent = output.sendSome(buffer.stringView.slice(0, count))
+        let sent = output.sendSome(buffer.slice(0, count))
         assert sent == count
 
       output.sendClose(JustClose)
@@ -101,7 +101,7 @@ when not defined(windows):
       while true:
         await input.waitForData
         let data = input.peekMany
-        let count = await writeAsync(fd, data.data, data.len)
+        let count = await writeAsync(fd, addr data[0], data.len)
         assert count >= 0
         input.discardItems(count)
 

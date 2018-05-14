@@ -34,7 +34,7 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
       self.inputOther.sendClose(uvError(nread, "read stream"))
   else:
     assert nread <= buf.len
-    let sent = self.inputOther.sendSome(ByteView(data: buf.base, size: nread))
+    let sent = self.inputOther.sendSome(unsafeInitView(cast[ptr byte](buf.base), nread))
     assert sent == nread
 
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
@@ -94,7 +94,7 @@ proc writeReady(self: UvPipe) =
   else:
     self.outputOther.onRecvReady.removeAllListeners
 
-    self.writingNow = uv_buf_t(base: waiting.data, len: waiting.size)
+    self.writingNow = uv_buf_t(base: addr waiting[0], len: waiting.len)
     checkZero "write", uv_write(self.writeReq, self.stream, addr self.writingNow, 1, writeCb)
 
 proc resume*(self: UvPipe) =

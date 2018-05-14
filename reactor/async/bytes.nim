@@ -21,7 +21,7 @@ proc readItem*[T](self: Input[byte], `type`: typedesc[T], endian: Endianness): F
   if endian == cpuEndian and self.dataAvailable >= sizeof(T):
     # fast path
     var item: T
-    let s = self.receiveSomeInto(ByteView(data: unsafeAddr item, size: sizeof(T)))
+    let s = self.receiveSomeInto(unsafeInitView(cast[ptr byte](addr item), sizeof(T)))
     assert s == sizeof(T)
     return now(just(item))
   else:
@@ -57,7 +57,7 @@ proc writeItem*[T](self: Output[byte], item: T, endian: Endianness): Future[void
   ## Write value of type T with specified endanness. (T should be scalar type like int32)
   if endian == cpuEndian and self.freeBufferSize >= sizeof(T):
     # fast path
-    let s = self.sendSome(ByteView(data: unsafeAddr item, size: sizeof(T)))
+    let s = self.sendSome(unsafeInitView(cast[ptr byte](unsafeAddr item), sizeof(T)))
     assert s == sizeof(T)
     return now(just())
   else:

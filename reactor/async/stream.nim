@@ -101,7 +101,7 @@ proc isRecvClosed*(self: BufferedOutput): bool =
 proc isSendClosed*(self: BufferedInput): bool =
   self.sendClosed
 
-proc sendSome*[T](self: BufferedOutput[T], data: ConstView[T]): int =
+proc sendSome*[T](self: BufferedOutput[T], data: View[T]): int =
   ## Provides some items pointed by view ``data``. Returns how many items
   ## were actualy provided.
   self.checkProvide()
@@ -147,12 +147,8 @@ proc sendAll*[T](self: BufferedOutput[T], data: seq[T]|string): Future[void] =
   if sself.recvClosed:
     return now(error(void, sself.recvCloseException))
 
-  when type(data) is string:
-    var data = data
-    let dataView = asByteView(data)
-  else:
-    var data = data
-    let dataView = seqView(data)
+  var data = data
+  let dataView = unsafeInitView(data)
 
   var offset = self.sendSome(dataView)
   if offset == data.len:
@@ -171,7 +167,7 @@ proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
   if sself.recvClosed:
     return now(error(void, sself.recvCloseException))
 
-  if self.sendSome(singleItemView(item)) == 1:
+  if self.sendSome(unsafeInitView(addr item, 1)) == 1:
     return now(just())
 
   let completer = newCompleter[void]()
@@ -183,7 +179,7 @@ proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
       self.onSendReady.removeListener sendListenerId
       return
 
-    if self.sendSome(singleItemView(item)) == 1:
+    if self.sendSome(unsafeInitView(addr item, 1)) == 1:
       completer.complete()
       self.onSendReady.removeListener sendListenerId)
 
@@ -223,7 +219,7 @@ proc dataAvailable*[T](self: BufferedInput[T]): int =
   ## How many items can be received from the queue without blocking?
   return self.queue.len
 
-proc peekMany*[T](self: BufferedInput[T]): ConstView[T] =
+proc peekMany*[T](self: BufferedInput[T]): View[T] =
   ## Look at several items from the input.
   return self.queue.peekFrontMany()
 
@@ -297,8 +293,9 @@ proc receiveSomeInto*[T](self: BufferedInput[T], target: View[T]): int =
 
 proc receiveChunkSlow[T, Ret](self: BufferedInput[T], minn: int, maxn: int, returnType: typedesc[Ret]): Future[Ret] =
   var res: Ret = when Ret is seq: newSeq[T](maxn) else: newString(maxn)
+  let resView = unsafeInitView(res)
 
-  var offset = self.receiveSomeInto(res.asView)
+  var offset = self.receiveSomeInto(resView)
 
   template getResult: untyped =
     if offset == res.len:
@@ -317,7 +314,7 @@ proc receiveChunkSlow[T, Ret](self: BufferedInput[T], minn: int, maxn: int, retu
   var recvListenerId: CallbackId
 
   recvListenerId = self.onRecvReady.addListener(proc() =
-    offset += self.receiveSomeInto(res.asView.slice(offset))
+    offset += self.receiveSomeInto(resView.slice(offset))
     if offset >= minn:
       var res = getResult()
       res.shallow()
@@ -335,7 +332,7 @@ proc receiveChunk[T, Ret](self: BufferedInput[T], minn: int, maxn: int, returnTy
     let dataLen = min(maxn, self.dataAvailable)
     var res = when Ret is seq: newSeq[T](dataLen) else: newString(dataLen)
     res.shallow
-    let offset = self.receiveSomeInto(res.asView)
+    let offset = self.receiveSomeInto(unsafeInitView(res))
     assert offset == dataLen
     return now(just(res))
   else:
@@ -360,7 +357,7 @@ proc completeFromStreamClose*(c: Completer[void], err: ref Exception) =
   else:
     c.completeError(err)
 
-proc pipeChunks*[T, R](self: BufferedInput[T], target: BufferedOutput[R], function: (proc(source: ConstView[T], target: var seq[R]))=nil): Future[void] =
+proc pipeChunks*[T, R](self: BufferedInput[T], target: BufferedOutput[R], function: (proc(source: View[T], target: var seq[R]))=nil): Future[void] =
   ## Copy data in chunks from ``self`` to ``target``. If ``function`` is provided it will be called to copy data from source to destination chunks (so custom processing can be made).
   ##
   ## Use this instead of ``pipe`` to reduce function call overhead for small elements.
@@ -417,13 +414,13 @@ proc pipeChunks*[T, R](self: BufferedInput[T], target: BufferedOutput[R], functi
   return ready.getFuture
 
 proc mapperFunc[T, R](f: (proc(x: T):R)): auto =
-  return proc(source: ConstView[T], target: var seq[R]) =
+  return proc(source: View[T], target: var seq[R]) =
     target = newSeq[R](source.len)
     for i in 0..<source.len:
       target[i] = f(source[i])
 
 proc flatMapperFunc[T, R](f: (proc(x: T): seq[R])): auto =
-  return proc(source: ConstView[T], target: var seq[R]) =
+  return proc(source: View[T], target: var seq[R]) =
     target = @[]
     for i in 0..<source.len:
       for item in f(source[i]):
@@ -443,7 +440,7 @@ proc pipe*[T](self: BufferedInput[T], target: BufferedOutput[T]): Future[void] =
   when not defined(release): assert self.marker == 0xDEADBEEF'u32
   pipeChunks(self, target, nil)
 
-proc mapChunks*[T, R](self: BufferedInput[T], function: (proc(source: ConstView[T], target: var seq[R]))): BufferedInput[R] =
+proc mapChunks*[T, R](self: BufferedInput[T], function: (proc(source: View[T], target: var seq[R]))): BufferedInput[R] =
   ## Map data in chunks from ``self`` and return mapped stream. ``function`` will be called to copy data from source to destination chunks (so custom processing can be made).
   ##
   ## Use this instead of ``map`` to function call overhead for small elements.
