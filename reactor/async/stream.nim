@@ -189,7 +189,7 @@ proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
 
   return completer.getFuture
 
-proc sendClose*(self: BufferedOutput, exc: ref Exception) =
+proc sendClose*(self: BufferedOutput, exc: ref Exception=JustClose) =
   ## Closes the output stream -- signals that no more items will be provided.
   if sself.sendClosed: return
   sself.sendClosed = true
@@ -204,14 +204,14 @@ proc waitForRecvClose*[T](self: BufferedOutput[T], callback: proc()) =
       callback()
       self.onSendReady.removeListener(recvListenerId))
 
-proc recvClose*[T](self: BufferedInput[T], exc: ref Exception) =
+proc recvClose*[T](self: BufferedInput[T], exc: ref Exception=JustClose) =
   ## Closes the input stream -- signals that no more items will be received.
   if self.recvClosed: return
   self.recvClosed = true
   self.recvCloseException = exc
   self.onSendReady.callListener()
 
-proc close*[T](self: Pipe[T], exc: ref Exception) =
+proc close*[T](self: Pipe[T], exc: ref Exception=JustClose) =
   self.input.recvClose(exc)
   self.output.sendClose(exc)
 

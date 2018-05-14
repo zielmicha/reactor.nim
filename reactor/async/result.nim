@@ -149,7 +149,10 @@ template catchError*(e: untyped): untyped =
       just(e)
   except:
     when type(e) is Result:
-      error(type(e.get), getCurrentException())
+      error(when type(e) is Result[void]:
+              void
+            else:
+              type(e.get), getCurrentException())
     else:
       error(type(e), getCurrentException())
 
