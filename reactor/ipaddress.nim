@@ -24,6 +24,8 @@ type
   IpInterface* = Interface[IpAddress]
     ## Represents IP address with a mask.
 
+  InetAddress* = tuple[ip: IpAddress, port: int]
+
 proc toBinaryString*(s: Ip4Address | Ip6Address): string =
   ## Converts IP address to its binary representation.
   const size = when s is Ip4Address: 4 else: 16

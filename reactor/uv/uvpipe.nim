@@ -23,3 +23,6 @@ proc streamFromFd*(fd: cint): BytePipe =
 proc closeFd*(fd: cint) =
   if close(fd) != 0:
     raiseOSError(osLastError())
+
+proc closeFd*(fd: SocketHandle) =
+  closeFd(fd.cint)

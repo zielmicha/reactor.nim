@@ -44,6 +44,9 @@ proc newUdpSocket*(): UdpSocket =
 
   return socket
 
+proc close*(self: UdpSocket) =
+  self.output.sendClose(JustClose)
+
 proc send*(self: UdpSocket, dest: tuple[address: IpAddress, port: int], data: string): Future[void] =
   self.output.send(UdpPacket(dest: dest, data: data))
 
@@ -68,6 +71,16 @@ proc recvCb(handle: ptr uv_udp_t; nread: int; buf: ptr uv_buf_t; `addr`: ptr Soc
 
   if socket.inputProvider.freeBufferSize > 0:
     discard socket.inputProvider.send(packet)
+
+proc getSockAddr(stream: ptr uv_udp_t): tuple[address: IpAddress, port: int] =
+  ## Get address of an UDP socket (similar to POSIX getsockname).
+  var name: SockAddr_storage
+  var length = sizeof(name).cint
+  checkZero "getsockname", uv_udp_getsockname(stream, cast[ptr SockAddr](addr name), addr length)
+  return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
+
+proc getSockAddr*(conn: UdpSocket): tuple[address: IpAddress, port: int] =
+  return getSockAddr(conn.handle)
 
 proc bindAddress*(socket: UdpSocket, host: IpAddress, port: int): Result[void] =
   assert(not socket.alreadyBound)

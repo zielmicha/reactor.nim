@@ -119,6 +119,7 @@ proc bindSocketForConnect*(bindHost: IpAddress, bindPort: int): Future[TcpBoundS
 
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), handle)
   checkZero "tcp_nodelay", uv_tcp_nodelay(handle, 0)
+  checkZero "tcp_keepalive", uv_tcp_keepalive(handle, 1, 55)
 
   var sockaddress: SockAddr_storage
   ipaddrToSockaddr(cast[ptr SockAddr](addr sockaddress),
@@ -204,7 +205,7 @@ proc connectTcp*(host: string, port: int): Future[TcpConnection] {.async.} =
   else: # TODO: iterate over addresses
     return (await connectTcp(addresses[0], port))
 
-proc close*(t: TcpConnection, err: ref Exception) =
+proc close*(t: TcpConnection, err: ref Exception=JustClose) =
   ## Close TCP connection.
   # why close doesn't work without this?
   BytePipe(t).close(err)
