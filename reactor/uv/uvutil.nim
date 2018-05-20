@@ -106,7 +106,7 @@ proc ipaddrToSockaddr*(address: ptr SockAddr, ip: IpAddress, port: int) =
     addr6.sin6_port = htons(cast[InPort](port.uint16))
     copyMem(addr6.sin6_addr.s6_addr.addr, addr ip.ip6, 16)
 
-proc sockaddrToIpaddr*(address: ptr SockAddr): tuple[address: IpAddress, port: int] =
+proc sockaddrToIpaddr*(address: ptr SockAddr): InetAddress =
   if address.sa_family == AF_INET:
      var a = cast[ptr Sockaddr_in](address)
      return (a.sin_addr.s_addr.ipAddress.from4, htons(a.sin_port).int)

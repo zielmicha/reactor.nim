@@ -14,7 +14,7 @@ else:
 
 type
   TcpServer* = ref object of uvlisten.Server[TcpServer, TcpConnection]
-    sockAddr: tuple[address: IpAddress, port: int]
+    sockAddr: InetAddress
 
   TcpConnection* = ref object of uvstream.UvPipe
 
@@ -33,28 +33,28 @@ type
 
 export UvStream, incomingConnections, acceptAsFd, accept, close
 
-proc getPeerAddr*(fd: cint): tuple[address: IpAddress, port: int] =
+proc getPeerAddr*(fd: cint): InetAddress =
   ## Get address of a remote peer (similar to POSIX getpeername).
   var name: SockAddr_storage
   var length = sizeof(name).Socklen
   checkZero "getpeername", getpeername(SocketHandle(fd), cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
-proc getPeerAddr*(conn: TcpConnection): tuple[address: IpAddress, port: int] =
+proc getPeerAddr*(conn: TcpConnection): InetAddress =
   ## Get address of a remote peer (similar to POSIX getpeername).
   var name: SockAddr_storage
   var length = sizeof(name).cint
   checkZero "getpeername", uv_tcp_getpeername(conn.stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
-proc getSockAddr(stream: ptr uv_stream_t): tuple[address: IpAddress, port: int] =
+proc getSockAddr(stream: ptr uv_stream_t): InetAddress =
   ## Get address of a TCP socket (similar to POSIX getsockname).
   var name: SockAddr_storage
   var length = sizeof(name).cint
   checkZero "getsockname", uv_tcp_getsockname(stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
-proc getSockAddr*(conn: TcpBoundSocket | TcpConnection): tuple[address: IpAddress, port: int] =
+proc getSockAddr*(conn: TcpBoundSocket | TcpConnection): InetAddress =
   return getSockAddr(conn.stream)
 
 proc getSockAddr*(conn: TcpServer): auto =

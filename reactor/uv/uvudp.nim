@@ -4,8 +4,8 @@ import reactor/uv/uv, reactor/uv/uvutil, posix
 type
   UdpPacket* = ref object
     data*: string
-    source*: tuple[address: IpAddress, port: int]
-    dest*: tuple[address: IpAddress, port: int]
+    source*: InetAddress
+    dest*: InetAddress
 
   UdpSocket* = ref object of Pipe[UdpPacket]
     handle: ptr uv_udp_t
@@ -18,7 +18,7 @@ proc handleOutput(sock: UdpSocket) {.async.} =
     let packet = await sock.outputStream.receive()
 
     let sockaddress = cast[ptr SockAddr](alloc0(sizeof(Sockaddr_storage)))
-    ipaddrToSockaddr(sockaddress, packet.dest.address, packet.dest.port)
+    ipaddrToSockaddr(sockaddress, packet.dest.ip, packet.dest.port)
     var buf: uv_buf_t = uv_buf_t(base: addr packet.data[0], len: packet.data.len)
     discard uv_udp_try_send(sock.handle, addr buf, 1, sockaddress)
     dealloc(sockaddress)
@@ -47,7 +47,7 @@ proc newUdpSocket*(): UdpSocket =
 proc close*(self: UdpSocket) =
   self.output.sendClose(JustClose)
 
-proc send*(self: UdpSocket, dest: tuple[address: IpAddress, port: int], data: string): Future[void] =
+proc send*(self: UdpSocket, dest: InetAddress, data: string): Future[void] =
   self.output.send(UdpPacket(dest: dest, data: data))
 
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
@@ -72,14 +72,14 @@ proc recvCb(handle: ptr uv_udp_t; nread: int; buf: ptr uv_buf_t; `addr`: ptr Soc
   if socket.inputProvider.freeBufferSize > 0:
     discard socket.inputProvider.send(packet)
 
-proc getSockAddr(stream: ptr uv_udp_t): tuple[address: IpAddress, port: int] =
+proc getSockAddr(stream: ptr uv_udp_t): InetAddress =
   ## Get address of an UDP socket (similar to POSIX getsockname).
   var name: SockAddr_storage
   var length = sizeof(name).cint
   checkZero "getsockname", uv_udp_getsockname(stream, cast[ptr SockAddr](addr name), addr length)
   return sockaddrToIpaddr(cast[ptr SockAddr](addr name))
 
-proc getSockAddr*(conn: UdpSocket): tuple[address: IpAddress, port: int] =
+proc getSockAddr*(conn: UdpSocket): InetAddress =
   return getSockAddr(conn.handle)
 
 proc bindAddress*(socket: UdpSocket, host: IpAddress, port: int): Result[void] =
@@ -102,3 +102,6 @@ proc bindAddress*(socket: UdpSocket, host: IpAddress, port: int): Result[void] =
 proc bindAddress*(socket: UdpSocket, host: string, port: int): Future[void] {.async.} =
   let address = await resolveSingleAddress(host)
   await bindAddress(socket, address, port)
+
+proc bindMulticast*(socket: UdpSocket, groupAddress: IpAddress, port: int): Result[void] =
+  discard

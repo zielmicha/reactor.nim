@@ -26,6 +26,9 @@ type
 
   InetAddress* = tuple[ip: IpAddress, port: int]
 
+proc address*(i: InetAddress): IpAddress =
+  return i.ip
+
 proc toBinaryString*(s: Ip4Address | Ip6Address): string =
   ## Converts IP address to its binary representation.
   const size = when s is Ip4Address: 4 else: 16
@@ -311,6 +314,12 @@ proc nthAddress*(i: IpInterface, n: int64): IpAddress =
     raise newException(ValueError, "address out of network range")
 
   return i.networkAddress + n
+
+proc isPrivate*(i: IpAddress): bool =
+  return (
+    parseInterface("10.0.0.0/8").contains(i) and
+    parseInterface("192.168.0.0/16").contains(i) and
+    parseInterface("172.16.0.0/12").contains(i))
 
 proc hash*(x: IpAddress): int =
   result = 0
