@@ -156,7 +156,7 @@ proc addressBitLength*(a: Ip4Address): int = addressBitLength(ip4)
 proc addressBitLength*(a: Ip6Address): int = addressBitLength(ip6)
 
 proc parseAddress4*(a: string): Ip4Address =
-  let parts = a.split(".").map(a => parseInt(a).uint8).toSeq
+  let parts = a.split(".").mapIt(parseInt(it).uint8)
   if parts.len != 4:
     raise newException(ValueError, "invalid IPv4 address ($1)" % [$a])
   [parts[0], parts[1], parts[2], parts[3]].Ip4Address

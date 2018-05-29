@@ -156,6 +156,9 @@ proc sendAll*[T](self: BufferedOutput[T], data: seq[T]|string): Future[void] =
   else:
     return sendAllSlow(self, data, dataView, offset)
 
+proc maybeSend*[T](self: BufferedOutput[T], item: T): bool =
+  return self.sendSome(unsafeInitView(unsafeAddr item, 1)) == 1
+
 proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
   ## Provides a single item. Returns Future that finishes when the item
   ## is pushed into queue.
@@ -167,7 +170,7 @@ proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
   if sself.recvClosed:
     return now(error(void, sself.recvCloseException))
 
-  if self.sendSome(unsafeInitView(addr item, 1)) == 1:
+  if self.maybeSend(item):
     return now(just())
 
   let completer = newCompleter[void]()
@@ -179,7 +182,7 @@ proc send*[T](self: BufferedOutput[T], item: T): Future[void] =
       self.onSendReady.removeListener sendListenerId
       return
 
-    if self.sendSome(unsafeInitView(addr item, 1)) == 1:
+    if self.maybeSend(item):
       completer.complete()
       self.onSendReady.removeListener sendListenerId)
 

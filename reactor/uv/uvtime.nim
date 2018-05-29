@@ -1,5 +1,15 @@
 import reactor/async, reactor/uv/uvutil, reactor/uv/uv
 
+type
+  Time* = distinct int64
+
+proc currentTime*(): Time =
+  return uv_now(getThreadUvLoop()).Time
+
+proc `-`*(a: Time, b: Time): int64 =
+  ## returns time offset in milliseconds
+  return int64(a) - int64(b)
+
 proc asyncSleep*(timeout: int64): Future[void] =
   let completer = newCompleter[void]()
   let handle = cast[ptr uv_timer_t](newUvHandle(UV_TIMER))

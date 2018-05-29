@@ -72,6 +72,34 @@ proc addSignalHandler*(signal: cint, callback: proc()) =
 
   checkZero "signal_start", uv_signal_start(handle, cb, signal)
 
+# ThreadsafeQueue
+
+type
+  ThreadsafeQueueVal[T] = object
+    cb: proc(val: T)
+    channel: Channel[T]
+    channelReady: ptr uv_async_t
+
+  ThreadsafeQueue*[T] = ptr ThreadsafeQueueVal[T]
+
+proc queueMessageReady[T](req: ptr uv_async_t) {.cdecl.} =
+  let q = cast[ThreadsafeQueue[T]](req.data)
+  while q.channel.peek > 0: # this is safe to use, we are the only recver
+    let data = q.channel.recv
+    q.cb(data)
+
+proc newThreadsafeQueue*[T](cb: proc(val: T)): ThreadsafeQueue[T] =
+  result = create(ThreadsafeQueueVal[T])
+  result.cb = cb
+  result.channel.open
+  result.channelReady = cast[ptr uv_async_t](newUvHandle(UV_ASYNC))
+  result.channelReady.data = result
+  checkZero "async_init", uv_async_init(getThreadUvLoop(), result.channelReady, queueMessageReady[T])
+
+proc sendThreadsafe*[T](self: ThreadsafeQueue[T], value: T) =
+  self.channel.send(value)
+  checkZero "async_send", uv_async_send(self.channelReady)
+
 # GC nodelay
 
 var gcNoDelayHandle {.threadvar.}: ptr uv_prepare_t
