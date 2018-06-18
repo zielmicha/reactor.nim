@@ -143,6 +143,12 @@ proc `$`*(a: IpAddress): string =
 proc `$`*[T](a: Interface[T]): string =
   "$1/$2" % [$a.address, $a.mask]
 
+proc `$`*(a: InetAddress): string =
+  if a.ip.kind == ip4:
+    "$1:$2" % [$a.ip, $a.port]
+  else:
+    "[$1]:$2" % [$a.ip, $a.port]
+
 proc addressBitLength*(kind: IpKind): int =
   case kind:
   of ip4: return 32
@@ -194,6 +200,17 @@ proc parseAddress*(a: string): IpAddress =
   else:
     result.kind = ip4
     result.ip4 = parseAddress4(a)
+
+proc parseInetAddress*(s: string): InetAddress =
+  var spl = s.rsplit(":", maxsplit=1)
+  if spl.len != 2 or s.endswith("]"):
+    raise newException(Exception, "address $1 doesn't have port" % s)
+
+  var a = spl[0]
+  var b = spl[1]
+  if a[0] == '[' and a[^1] == ']':
+    a = a[1..^1]
+  return (parseAddress(a), parseInt(b))
 
 proc getBit*(a: Ip4Address | Ip6Address | IpAddress, i: int): bool =
   return ((a[i div 8] shr uint8(i mod 8)) and 1) == 1
