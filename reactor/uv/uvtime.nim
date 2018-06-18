@@ -6,9 +6,14 @@ type
 proc currentTime*(): Time =
   return uv_now(getThreadUvLoop()).Time
 
+proc `<`*(a: Time, b: Time): bool {.borrow.}
+
 proc `-`*(a: Time, b: Time): int64 =
   ## returns time offset in milliseconds
   return int64(a) - int64(b)
+
+proc `+`*(a: Time, b: int): Time =
+  return Time(int64(a) + int64(b))
 
 proc asyncSleep*(timeout: int64): Future[void] =
   let completer = newCompleter[void]()
