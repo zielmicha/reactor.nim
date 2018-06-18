@@ -50,6 +50,9 @@ proc close*(self: UdpSocket) =
 proc send*(self: UdpSocket, dest: InetAddress, data: string): Future[void] =
   self.output.send(UdpPacket(dest: dest, data: data))
 
+proc send*(self: UdpSocket, dest: InetAddress, data: Buffer): Future[void] =
+  self.send(dest, data.copyAsString) # todo: avoid copy
+
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
   buf.base = alloc0(suggestedSize)
   buf.len = suggestedSize
