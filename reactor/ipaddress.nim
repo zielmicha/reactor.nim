@@ -209,7 +209,7 @@ proc parseInetAddress*(s: string): InetAddress =
   var a = spl[0]
   var b = spl[1]
   if a[0] == '[' and a[^1] == ']':
-    a = a[1..^1]
+    a = a[1..^2]
   return (parseAddress(a), parseInt(b))
 
 proc getBit*(a: Ip4Address | Ip6Address | IpAddress, i: int): bool =
@@ -334,8 +334,8 @@ proc nthAddress*(i: IpInterface, n: int64): IpAddress =
 
 proc isPrivate*(i: IpAddress): bool =
   return (
-    parseInterface("10.0.0.0/8").contains(i) and
-    parseInterface("192.168.0.0/16").contains(i) and
+    parseInterface("10.0.0.0/8").contains(i) or
+    parseInterface("192.168.0.0/16").contains(i) or
     parseInterface("172.16.0.0/12").contains(i))
 
 proc hash*(x: IpAddress): int =

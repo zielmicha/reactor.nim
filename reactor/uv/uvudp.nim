@@ -91,7 +91,7 @@ proc bindAddress*(socket: UdpSocket, host: IpAddress, port: int): Result[void] =
 
   let sockaddress = cast[ptr SockAddr](alloc0(sizeof(Sockaddr_storage)))
   ipaddrToSockaddr(sockaddress, host, port)
-  let err = uv_udp_bind(socket.handle, sockaddress, 0)
+  let err = uv_udp_bind(socket.handle, sockaddress, UV_UDP_REUSEADDR.cuint)
   dealloc(sockaddress)
   if err != 0:
     return error(void, uvError(err, "couldn't bind UDP socket"))
@@ -107,4 +107,12 @@ proc bindAddress*(socket: UdpSocket, host: string, port: int): Future[void] {.as
   await bindAddress(socket, address, port)
 
 proc bindMulticast*(socket: UdpSocket, groupAddress: IpAddress, port: int): Result[void] =
-  discard
+  let r = socket.bindAddress(if groupAddress.kind == ip6: parseAddress("::") else: parseAddress("0.0.0.0"), port)
+  if r.isError: return r
+
+  let err = uv_udp_set_membership(socket.handle, $groupAddress, nil, UV_JOIN_GROUP)
+  if err != 0:
+    return error(void, uvError(err, "couldn't set multicast membership"))
+
+  checkZero "multicast", uv_udp_set_multicast_loop(socket.handle, 1)
+  return just()
