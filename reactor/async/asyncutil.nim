@@ -1,8 +1,5 @@
 # included from reactor/async.nim
 
-proc hash*(x: uint64): Hash =
-  hash(cast[int64](x))
-
 type CompleterTable*[K, V] = ref object
   ## A dictionary of completers. Useful for implementing RPC protocols with message ids.
   completers: Table[K, seq[Completer[V]]]

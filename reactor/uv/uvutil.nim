@@ -13,7 +13,7 @@ else:
 
 template checkZero*(name, e) =
   if e != 0:
-    raise newException(UVError, "call to " & name & " failed")
+    raise newException(UVError, "call to " & name & " failed (error code: " & $e & ")")
 
 proc calloc(o: csize, a: csize): pointer {.importc, header: "<string.h>".}
 proc free(a: pointer) {.importc, header: "<string.h>".}

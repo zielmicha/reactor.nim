@@ -184,7 +184,7 @@ proc parseAddress6*(s: string): Ip6Address =
 
   var address: array[16, uint8]
   for i, part in parts:
-    let num = parseHexInt(part)
+    let num = if part == "": 0 else: parseHexInt(part)
     if num > 0xffff or num < 0:
       raise newException(ValueError, "invalid IPv6 address ($1)" % [$s])
     address[i*2] = uint8(num div 256)

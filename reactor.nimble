@@ -1,4 +1,4 @@
-version       = "0.5.0"
+version       = "0.6.0"
 author        = "Michał Zieliński <michal@zielinscy.org.pl>"
 description   = "Asynchronous networking engine for Nim"
 license       = "MIT"
