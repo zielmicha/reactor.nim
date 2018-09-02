@@ -92,8 +92,8 @@ proc wrapRedis*(connectProc: (proc(client: RedisClient): Future[void]), reconnec
   RedisClient(sendMutex: newAsyncMutex(), connectProc: connectProc, reconnectFlag: reconnect)
 
 proc reconnect*(client: RedisClient) {.async.} =
-  if not client.reconnectFlag and client.pipe != nil:
-    return
+  if client.pipe != nil:
+    client.pipe.close JustClose
 
   while true:
     let fut = (client.connectProc)(client)
@@ -104,17 +104,26 @@ proc reconnect*(client: RedisClient) {.async.} =
     else:
       break
 
+proc maybeReconnect(client: RedisClient) {.async.} =
+  if not client.reconnectFlag and client.pipe != nil:
+    return
+
+  await client.reconnect
+
+proc isConnected*(client: RedisClient): bool =
+  return client.pipe != nil and not client.pipe.output.isRecvClosed
+
 proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[R] {.async.} =
   ## Perform a Redis call.
   when defined(timeRedis):
     let start = epochTime()
 
-  if client.pipe == nil or client.pipe.output.isRecvClosed:
-    await client.reconnect()
+  await client.sendMutex.lock
+  if not client.isConnected:
+    await client.maybeReconnect()
 
   var resp: Future[R]
 
-  await client.sendMutex.lock
   asyncDefer: client.sendMutex.unlock # correct?
   await client.pipe.output.serialize(cmd)
   resp = unserialize(client.pipe.input, R)
@@ -148,8 +157,8 @@ macro defCommand*(sname: untyped, args: untyped, rettype: untyped): untyped =
     proc `name`* (): Future[`rettype`] =
       client.call(@`callArgs`, `rettype`)
 
-  defArgs[0] = r[0][3][0]
-  r[0][3] = defArgs
+  defArgs[0] = r[3][0]
+  r[3] = defArgs
   return r
 
 defCommand("APPEND", [(key, string), (value, string)], int64)
@@ -163,6 +172,8 @@ defCommand("EXISTS", [(key, string)], void)
 defCommand("FLUSHALL", [], int64)
 defCommand("GET", [(key, string)], string)
 defCommand("GETSET", [(key, string), (value, string)], string)
+defCommand("SET", [(key, string), (value, string)], string)
+defCommand("SETEX", [(key, string), (value, string), (timeout, string)], string)
 defCommand("HDEL", [(key, string), (field, string)], int64)
 defCommand("HEXISTS", [(key, string), (field, string)], int64)
 defCommand("HGET", [(key, string), (field, string)], string)
@@ -209,7 +220,7 @@ proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage] {.
       if not client.reconnectFlag and client.pipe != nil:
         asyncRaise "socket closed"
 
-      await client.reconnect()
+      await client.maybeReconnect()
       reconnect = false
       if (tryAwait client.pubsubStart(channels)).isError:
         stderr.writeLine "Could not start pubsub channel"
@@ -235,7 +246,7 @@ proc connectProc(client: RedisClient, host: string, port: int, password: string)
   if password != nil:
     await client.auth(password)
 
-proc connect*(host: string="127.0.0.1", port: int=6379, password: string = nil, reconnect=false): Future[RedisClient] {.async.} =
+proc connect*(host: string="127.0.0.1", port: int=6379, password: string = nil, reconnect=false): RedisClient =
   ## Connect to Redis TCP instance.
 
   return wrapRedis((proc(client: RedisClient): Future[void] = connectProc(client, host, port, password)), reconnect=reconnect)
