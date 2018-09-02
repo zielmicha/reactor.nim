@@ -193,7 +193,6 @@ proc parseAddress6*(s: string): Ip6Address =
   address.Ip6Address
 
 proc parseAddress*(a: string): IpAddress =
-  assert a != nil
   if ":" in a:
     result.kind = ip6
     result.ip6 = parseAddress6(a)

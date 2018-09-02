@@ -143,7 +143,6 @@ macro async*(a): untyped =
       return
 
     template asyncDefer(e: typed) =
-      if defers == nil: defers = @[]
       defers.add(proc() = e)
 
     when asyncProcCompleter is Completer[void]:

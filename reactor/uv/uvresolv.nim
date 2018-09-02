@@ -23,7 +23,6 @@ proc addressesFromInfo(res: ptr AddrInfo): seq[IpAddress] =
   uv_freeaddrinfo(res)
 
 proc resolveAddress*(hostname: string): Future[seq[IpAddress]] =
-  assert hostname != nil
   let request = cast[ptr uv_getaddrinfo_t](newUvReq(UV_GETADDRINFO))
 
   type State = ref object

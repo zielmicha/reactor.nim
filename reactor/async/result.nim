@@ -52,7 +52,6 @@ else:
     ("", 0, "")
 
 proc attachInstInfo(exc: string, info: InstantationInfo): ref Exception =
-  assert exc != nil
   attachInstInfo(newException(Exception, exc), info)
 
 proc formatAsyncTrace(meta: ExceptionMeta): string =
@@ -71,13 +70,13 @@ proc printError*(err: ref Exception) =
     msg &= formatAsyncTrace(err.getMeta()) & "\L"
 
   let originalStacktrace = org.getStackTrace
-  if originalStacktrace != nil and originalStacktrace != "":
+  if originalStacktrace != "":
     msg &= "Original trace:\L" & originalStacktrace.split('\L', maxsplit=1)[1] & "\L"
 
   if org == nil:
     msg &= "Error: unknown (original exception: " & (if err == nil: "nil" else: err.repr) & ")\L"
   else:
-    msg &= "Error: " & (if org.msg == nil: "nil" else: $org.msg) & " [" & (if org.name != nil: $org.name else: "Exception") & "]\L"
+    msg &= "Error: " & ($org.msg) & " [" & ($org.name) & "]\L"
 
   if errorMessageWriter != nil:
     errorMessageWriter(msg)
@@ -106,7 +105,6 @@ proc error*[T; Exc: ref Exception](typename: typedesc[T], theError: Exc): Result
   Result[T](isSuccess: false, error: theError)
 
 proc error*[T](typename: typedesc[T], theError: string): Result[T] =
-  assert theError != nil
   Result[T](isSuccess: false, error: newException(Exception, theError))
 
 proc get*[T](r: Result[T]): T =
@@ -124,7 +122,7 @@ proc `$`*[T](r: Result[T]): string =
       return "just(...)"
   else:
     let err = r.error.getOriginal
-    return "error(" & (if err == nil or err.msg == nil: "nil" else: err.msg) & ")"
+    return "error(" & (if err == nil: "nil" else: err.msg) & ")"
 
 proc onSuccessOrErrorR*[T](f: Result[T], onSuccess: (proc(t:T)), onError: (proc(t:ref Exception))) =
   if f.isSuccess:

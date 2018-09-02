@@ -29,7 +29,7 @@ proc readCb(stream: ptr uv_stream_t, nread: int, buf: ptr uv_buf_t) {.cdecl.} =
     assert nread <= self.buffer.len
     var data = self.buffer[0..<nread]
     data.shallow
-    let provided = self.mOutput.sendSome(singleItemView(data))
+    let provided = self.mOutput.sendSome(unsafeInitView(addr data, 1))
     assert provided == 1
 
 proc allocCb(stream: ptr uv_handle_t, suggestedSize: csize, buf: ptr uv_buf_t) {.cdecl.} =
