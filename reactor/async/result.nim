@@ -38,6 +38,7 @@ when debugFutures:
       return nil
 
   proc attachInstInfo(exc: ref Exception, info: InstantationInfo): ref Exception =
+    assert exc != nil
     let meta = ExceptionMeta(instInfo: info, next: getMeta(exc), msg: "[exception proxy]")
     meta.original = exc.getOriginal
     return meta

@@ -112,7 +112,7 @@ proc sendSome*[T](self: BufferedOutput[T], data: View[T]): int =
   sself.queue.pushBackMany(data.slice(0, doPush))
   return doPush
 
-proc sendAllSlow[T](self: BufferedOutput[T], data: seq[T]|string,
+proc sendAllSlow[T](self: BufferedOutput[T], data: seq[T]|string|View[T],
                     dataView: View[T], offset: int): Future[void] =
   let completer = newCompleter[void]()
   var offset = offset
@@ -135,7 +135,7 @@ proc sendAllSlow[T](self: BufferedOutput[T], data: seq[T]|string,
 
   return completer.getFuture
 
-proc sendAll*[T](self: BufferedOutput[T], data: seq[T]|string): Future[void] =
+proc sendAll*[T](self: BufferedOutput[T], data: seq[T]|string|View[T]): Future[void] =
   ## Provides items from ``data``. Returns Future that finishes when all
   ## items are provided.
   when type(data) is string and not (T is byte):

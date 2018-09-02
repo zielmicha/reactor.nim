@@ -34,6 +34,10 @@ proc readChunkPrefixed*(self: Input[byte], sizeEndian=bigEndian): Future[string]
     asyncRaise("length too big")
   asyncReturn(await self.read(length.int))
 
+proc readBufferPrefixed*(self: Input[byte], sizeEndian=bigEndian): Future[Buffer] {.async.} =
+  let data = await readChunkPrefixed(self)
+  return newView(data)
+
 proc readChunksPrefixed*(self: Input[byte], sizeEndian=bigEndian): Input[string] =
   ## Iterate over byte input reading chunks prefixed by length.
   let (input, output) = newInputOutputPair[string]()
@@ -49,7 +53,26 @@ proc readChunksPrefixed*(self: Input[byte], sizeEndian=bigEndian): Input[string]
 
   return input
 
+proc readBuffersPrefixed*(self: Input[byte], sizeEndian=bigEndian): Input[Buffer] =
+  ## Iterate over byte input reading chunks prefixed by length.
+  let (input, output) = newInputOutputPair[Buffer]()
+
+  proc pipeChunks() {.async.} =
+    while true:
+      let chunk = await self.readBufferPrefixed(sizeEndian)
+      await output.send(chunk)
+
+  pipeChunks().onSuccessOrError(
+    onSuccess=nil,
+    onError=proc(err: ref Exception) = output.sendClose(err))
+
+  return input
+
 proc write*(self: Output[byte], data: string): Future[void] =
+  ## Alias for Output[byte].sendAll
+  return self.sendAll(data)
+
+proc write*(self: Output[byte], data: Buffer): Future[void] =
   ## Alias for Output[byte].sendAll
   return self.sendAll(data)
 
@@ -63,7 +86,7 @@ proc writeItem*[T](self: Output[byte], item: T, endian: Endianness): Future[void
   else:
     return self.write(pack(item, endian))
 
-proc writeChunkPrefixed*(self: Output[byte], item: string, sizeEndian=bigEndian): Future[void] {.async.} =
+proc writeChunkPrefixed*(self: Output[byte], item: string|Buffer, sizeEndian=bigEndian): Future[void] {.async.} =
   ## Write chunk prefixed by 4-byte length.
   await self.writeItem(item.len.uint32, sizeEndian)
   await self.write(item)
@@ -82,6 +105,21 @@ proc writeChunksPrefixed*(self: Output[byte]): Output[string] =
     onError=proc(err: ref Exception) = stream.recvClose(err))
 
   return provider
+
+proc writeBuffersPrefixed*(self: Output[byte]): Output[Buffer] =
+  ## Write strings over byte output prefixed by length.
+  let (input, output) = newInputOutputPair[Buffer]()
+
+  proc pipeChunks() {.async.} =
+    while true:
+      let item = await input.receive()
+      await self.writeChunkPrefixed(item)
+
+  pipeChunks().onSuccessOrError(
+    onSuccess=nil,
+    onError=proc(err: ref Exception) = input.recvClose(err))
+
+  return output
 
 proc readUntil*(self: Input[byte], chars: set[char], limit=high(int)): Future[string] {.async.} =
   ## Read from stream until one of ``chars`` is read or ``limit`` bytes are read.

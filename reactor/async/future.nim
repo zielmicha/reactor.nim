@@ -380,3 +380,9 @@ proc runMain*(f: Future[void]) =
   except:
     getCurrentException().printError
     quit(1)
+
+proc onErrorQuit*(f: Future[void]) =
+  f.onSuccessOrError proc(t: Result[void]) =
+    if t.isError:
+      t.error.printError
+      quit(1)
