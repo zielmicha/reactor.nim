@@ -27,7 +27,7 @@ proc unserialize*(input: ByteInput, typ: typedesc[string]): Future[string] {.asy
   elif ch == "$":
     let len = (await input.readInt())
     if len == -1:
-      return nil
+      return ""
     let body = await input.read(len.int)
     if (await input.read(2)) != "\r\L":
       asyncRaise newException(RedisError, "protocol error")
@@ -38,9 +38,11 @@ proc unserialize*(input: ByteInput, typ: typedesc[string]): Future[string] {.asy
 proc unserialize*(input: ByteInput, typ: typedesc[int64]): Future[int64] {.async.} =
   let ch = (await input.read(1))
   if ch == "-":
-    asyncRaise (await input.readError())
+    let err = (await input.readError())
+    asyncRaise err
   elif ch == ":":
-    return (await input.readInt())
+    let val = (await input.readInt())
+    return val
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
@@ -50,32 +52,29 @@ proc unserialize*(input: ByteInput, typ: typedesc[void]): Future[void] {.async.}
 proc unserialize*[T](input: ByteInput, typ: typedesc[seq[T]]): Future[seq[T]] {.async.} =
   let ch = (await input.read(1))
   if ch == "-":
-    asyncRaise (await input.readError())
+    let err = (await input.readError())
+    asyncRaise err
   elif ch == "*":
     let len = (await input.readInt())
     if len == -1:
-      return nil
+      return @[]
     var resp: seq[T] = @[]
     for i in 0..<(len.int):
-      resp.add(await unserialize(input, T))
+      let val = await unserialize(input, T)
+      resp.add(val)
     return resp
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
 proc serialize*[T](output: ByteOutput, val: seq[T]): Future[void] {.async.} =
-  if val == nil:
-    await output.write("*-1\r\n")
-  else:
-    await output.write("*" & ($val.len) & "\r\n")
-    for item in val:
-      await output.serialize(item)
+  await output.write("*" & ($val.len) & "\r\n")
+  for item in val:
+    await output.serialize(item)
 
 proc serialize*(output: ByteOutput, val: int64): Future[void] {.async.} =
   await output.write(":" & ($val) & "\r\n")
 
 proc serialize*(output: ByteOutput, val: string): Future[void] {.async.} =
-  if val == nil:
-    await output.write("$-1\r\n")
   await output.write("$" & ($val.len) & "\r\n")
   await output.write(val)
   await output.write("\r\n")
@@ -243,10 +242,10 @@ proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage] {.
 
 proc connectProc(client: RedisClient, host: string, port: int, password: string) {.async.} =
   client.pipe = await connectTcp(host, port)
-  if password != nil:
+  if password != "":
     await client.auth(password)
 
-proc connect*(host: string="127.0.0.1", port: int=6379, password: string = nil, reconnect=false): RedisClient =
+proc connect*(host: string="127.0.0.1", port: int=6379, password: string = "", reconnect=false): RedisClient =
   ## Connect to Redis TCP instance.
 
   return wrapRedis((proc(client: RedisClient): Future[void] = connectProc(client, host, port, password)), reconnect=reconnect)
@@ -262,7 +261,8 @@ when isMainModule:
     echo "running..."
     startListening().ignore()
     let redis = await connect(reconnect=true)
-    redis.append("reactor-test:list", "100").await.echo
+    let resp = await redis.append("reactor-test:list", "100")
+    echo resp
 
     while true:
       await asyncSleep(500)
