@@ -1,5 +1,5 @@
 import strutils, macros, times
-import reactor/async, reactor/tcp, reactor/time
+import reactor/async, reactor/tcp, reactor/time, collections
 
 type
   RedisError* = object of Exception
@@ -124,6 +124,9 @@ proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R]): Future[
   var resp: Future[R]
 
   asyncDefer: client.sendMutex.unlock # correct?
+
+  when defined(debugRedis):
+    stderr.writeLine "write " & $cmd
   await client.pipe.output.serialize(cmd)
   resp = unserialize(client.pipe.input, R)
 
@@ -172,7 +175,7 @@ defCommand("FLUSHALL", [], int64)
 defCommand("GET", [(key, string)], string)
 defCommand("GETSET", [(key, string), (value, string)], string)
 defCommand("SET", [(key, string), (value, string)], string)
-defCommand("SETEX", [(key, string), (value, string), (timeout, string)], string)
+defCommand("SETEX", [(key, string), (timeout, string), (value, string)], string)
 defCommand("HDEL", [(key, string), (field, string)], int64)
 defCommand("HEXISTS", [(key, string), (field, string)], int64)
 defCommand("HGET", [(key, string), (field, string)], string)
@@ -241,7 +244,8 @@ proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage] {.
 
 
 proc connectProc(client: RedisClient, host: string, port: int, password: string) {.async.} =
-  client.pipe = await connectTcp(host, port)
+  let x = await connectTcp(host, port)
+  client.pipe = x
   if password != "":
     await client.auth(password)
 
@@ -252,7 +256,7 @@ proc connect*(host: string="127.0.0.1", port: int=6379, password: string = "", r
 
 when isMainModule:
   proc startListening() {.async.} =
-    let redis = await connect(reconnect=true)
+    let redis = connect(reconnect=true)
     let messages = redis.pubsub(@["foo"])
     asyncFor item in messages:
       echo "got message: ", item
@@ -260,7 +264,7 @@ when isMainModule:
   proc main() {.async.} =
     echo "running..."
     startListening().ignore()
-    let redis = await connect(reconnect=true)
+    let redis = connect(reconnect=true)
     let resp = await redis.append("reactor-test:list", "100")
     echo resp
 
