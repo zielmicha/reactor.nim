@@ -120,7 +120,11 @@ proc sockaddrToIpaddr*(address: ptr SockAddr): InetAddress =
 var FD_CLOEXEC* {.importc, header: "<fcntl.h>"}: cint
 
 proc setCloexec*(fd: cint, state: cint=1): cint {.importc: "uv__cloexec_fcntl", discardable.}
-proc dupCloexec*(fd: cint): cint {.importc: "uv__dup".}
+
+proc dupCloexec*(fd: cint): cint =
+  # important: uv__dup and uv__cloexec_ioctl don't work on O_PATH fds
+  result = dup(fd)
+  setCloexec(result)
 
 proc c_exit(errorcode: cint) {.importc: "exit", header: "<stdlib.h>".}
 
