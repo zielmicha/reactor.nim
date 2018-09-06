@@ -92,7 +92,7 @@ proc getSendCloseException*(self: BufferedInput): auto =
 
 proc checkProvide(self: BufferedOutput) =
   if sself.sendClosed:
-    # closes are broken, disable this for now
+    # This was disabled for some reason. Should we enable this now?
     discard #raise newException(Exception, "provide on closed stream")
 
 proc isRecvClosed*(self: BufferedOutput): bool =
@@ -321,12 +321,12 @@ proc receiveChunkSlow[T, Ret](self: BufferedInput[T], minn: int, maxn: int, retu
     if offset >= minn:
       var res = getResult()
       res.shallow()
-      completer.complete(res)
       self.onRecvReady.removeListener recvListenerId
+      completer.complete(res)
       return
     if self.sendClosed:
-      completer.completeError(self.sendCloseException)
-      self.onRecvReady.removeListener recvListenerId)
+      self.onRecvReady.removeListener recvListenerId
+      completer.completeError(self.sendCloseException))
 
   return completer.getFuture
 

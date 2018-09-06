@@ -18,6 +18,8 @@ proc lock*(mutex: AsyncMutex): Future[void] =
     return now(just())
 
 proc unlock*(mutex: AsyncMutex) =
+  doAssert mutex.locked
+
   if mutex.wakeQueue.len == 0:
     mutex.locked = false
   else:

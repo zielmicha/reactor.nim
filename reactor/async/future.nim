@@ -58,6 +58,9 @@ proc `$`*[T](c: Completer[T]): string =
       curr = curr.next
   return "Completer $1 listener-count: $2" % [makeInfo(c.getFuture), $listenerCount]
 
+proc checkValid*(f: Future) =
+  doAssert f.isImmediate or f.completer != nil
+
 proc getFuture*[T](c: Completer[T]): Future[T] =
   ## Retrieves a Future managed by the Completer.
   Future[T](isImmediate: false, completer: c)
@@ -262,6 +265,7 @@ proc thenNowImpl[T, R](f: Future[T], function: (proc(t:T):R)): auto =
 
 proc completeFrom*[T](c: Completer[T], f: Future[T]) =
   ## When Future `f` completes, complete the Future managed by `c` with the same result.
+  doAssert c != nil
   onSuccessOrError[T](f,
                       onSuccess=proc(t: T) =
                         when T is void: complete[T](c)
@@ -275,14 +279,15 @@ proc complete*[T](c: Completer[T], f: Future[T]) =
 proc thenChainImpl[T, R](f: Future[T], function: (proc(t:T): Future[R])): Future[R] =
   let completer = newCompleter[R]()
 
-  proc onSuccess(t: T) =
+  proc thenChainOnSuccess(t: T) =
     when T is void:
       var newFut = function()
     else:
       var newFut = function(t)
+    newFut.checkValid
     completeFrom[R](completer, newFut)
 
-  onSuccessOrError[T](f, onSuccess=onSuccess,
+  onSuccessOrError[T](f, onSuccess=thenChainOnSuccess,
                       onError=proc(t: ref Exception) = completeError[R](completer, t))
 
   return completer.getFuture

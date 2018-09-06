@@ -61,6 +61,8 @@ template declAsyncIteratorRun(procName, asyncRaise) =
     try:
       asyncIter = it()
     except:
+      if getCurrentException() of AssertionError:
+        raise
       asyncRaise getCurrentException()
 
     if finished(it):
