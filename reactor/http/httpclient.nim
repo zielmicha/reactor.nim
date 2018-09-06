@@ -48,9 +48,9 @@ proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=fa
     request.headers["connection"] = "close"
 
   if "host" notin request.headers:
-    if request.host != nil:
+    if request.host != "":
       request.headers["host"] = request.host
-    elif conn.defaultHost != nil:
+    elif conn.defaultHost != "":
       request.headers["host"] = conn.defaultHost
 
   await conn.sendOnlyRequest(request)
@@ -74,7 +74,7 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
 
   var headers: HeaderTable = initHeaderTable()
 
-  var lastHeader: string = nil
+  var lastHeader: Option[string]
   var finish = false
 
   while not finish:
@@ -84,22 +84,22 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
 
     if not finish:
       if line.startsWith(" "): # obs-fold (https://tools.ietf.org/html/rfc7230#section-3.2.4)
-        if lastHeader == nil:
+        if lastHeader.isNone:
           asyncRaise newException(HttpError, "invalid obs-fold")
-        lastHeader &= " " & line.strip
+        lastHeader = some(lastHeader.get & " " & line.strip)
         continue
 
-    if lastHeader != nil:
-      let colon = lastHeader.find(":")
+    if lastHeader.isSome:
+      let colon = lastHeader.get.find(":")
       if colon == -1:
         asyncRaise newException(HttpError, "malformed header")
-      let key = lastHeader[0..<colon]
-      let value = lastHeader[colon + 1..^1]
+      let key = lastHeader.get[0..<colon]
+      let value = lastHeader.get[colon + 1..^1]
       headers[key] = value
       if headers.len > 200:
         asyncRaise newException(HttpError, "too many headers")
 
-    lastHeader = line.strip(leading=false)
+    lastHeader = line.strip(leading=false).some
 
   return HttpResponse(statusCode: statusCode, headers: headers)
 
