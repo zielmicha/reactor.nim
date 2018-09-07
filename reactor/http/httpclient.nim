@@ -1,21 +1,18 @@
-import reactor/async, reactor/tcp, reactor/safeuri, reactor/safeuri, strutils, options
-import reactor/http/httpcommon
-export httpcommon
+import reactor/async, reactor/tcp, strutils, options
+import reactor/http/httpcommon, reactor/http/httpimpl
+export httpcommon, httpimpl
 
 type
   HttpConnection* = ref object
     defaultHost: string
     conn: BytePipe
 
-  HttpError* = object of Exception
-
-const crlf = "\r\L"
-
 proc newHttpConnection*(conn: BytePipe, defaultHost: string): Future[HttpConnection] {.async} =
   return HttpConnection(conn: conn, defaultHost: defaultHost)
 
 proc newHttpConnection*(host: string, port=80): Future[HttpConnection] {.async.} =
-  return await newHttpConnection(await connectTcp(host, port), defaultHost=host)
+  let conn = await connectTcp(host, port)
+  return newHttpConnection(conn, defaultHost=host)
 
 proc newHttpConnection*(req: HttpRequest): Future[HttpConnection] =
   newHttpConnection(req.host, req.port)
@@ -38,7 +35,7 @@ proc makeHeaders(request: HttpRequest): Result[string] =
   return just(header)
 
 proc sendOnlyRequest*(conn: HttpConnection, request: HttpRequest): Future[void] {.async.} =
-  await conn.conn.output.write(await makeHeaders(request))
+  await conn.conn.output.write(makeHeaders(request).get)
 
 proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=false): Future[void] {.async.} =
   if request.data.isSome:
@@ -60,7 +57,7 @@ proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=fa
 proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
   var headerSizeLimit = 1024 * 8
   let line = await conn.conn.input.readLine(limit=headerSizeLimit)
-  if not line.endsWith("\L"): asyncRaise newException(HttpError, "status line too long")
+  if not line.endsWith("\L"): raise newException(HttpError, "status line too long")
 
   let statusSplit = line.strip().split(' ')
 
@@ -71,66 +68,13 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
     asyncRaise newException(HttpError, "invalid status code")
 
   let statusCode = statusSplit[1].parseInt
-
-  var headers: HeaderTable = initHeaderTable()
-
-  var lastHeader: Option[string]
-  var finish = false
-
-  while not finish:
-    let line = await conn.conn.input.readLine(limit=headerSizeLimit)
-    if not line.endsWith("\L"): asyncRaise newException(HttpError, "header too long")
-    finish = (line == "\L" or line == crlf)
-
-    if not finish:
-      if line.startsWith(" "): # obs-fold (https://tools.ietf.org/html/rfc7230#section-3.2.4)
-        if lastHeader.isNone:
-          asyncRaise newException(HttpError, "invalid obs-fold")
-        lastHeader = some(lastHeader.get & " " & line.strip)
-        continue
-
-    if lastHeader.isSome:
-      let colon = lastHeader.get.find(":")
-      if colon == -1:
-        asyncRaise newException(HttpError, "malformed header")
-      let key = lastHeader.get[0..<colon]
-      let value = lastHeader.get[colon + 1..^1]
-      headers[key] = value
-      if headers.len > 200:
-        asyncRaise newException(HttpError, "too many headers")
-
-    lastHeader = line.strip(leading=false).some
+  let headers = await readHeaders(conn.conn.input)
 
   return HttpResponse(statusCode: statusCode, headers: headers)
 
 proc readWithContentLength*(conn: HttpConnection, length: int64): ByteInput =
   let (input, output) = newInputOutputPair[byte]()
   pipeLimited(conn.conn.input, output, length).onErrorClose(output)
-  return input
-
-proc readChunked*(conn: HttpConnection): ByteInput =
-  let (input, output) = newInputOutputPair[byte]()
-
-  proc piper() {.async.} =
-    while true:
-      let info = (await conn.conn.input.readLine(limit=1024)).split(';')[0]
-      if not info.endsWith(crlf):
-        asyncRaise newException(HttpError, "invalid chunked encoding")
-
-      let length = await tryParseHexUint64(info)
-      if length != 0:
-        await pipeLimited(conn.conn.input, output, length, close=false)
-
-      let nl = await conn.conn.input.read(2)
-      if nl != crlf:
-        asyncRaise newException(HttpError, "invalid chunked encoding")
-
-      if length == 0:
-        break
-
-    output.sendClose(JustClose)
-
-  piper().onErrorClose(output)
   return input
 
 proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpResponse] {.async.} =
@@ -141,7 +85,7 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
 
   let te = response.headers.getOrDefault("transfer-encoding", "")
   if te == "chunked":
-    response.dataInput = conn.readChunked()
+    response.dataInput = conn.conn.input.readChunked()
   elif te == "":
     if "content-length" notin response.headers:
       # implicit length
@@ -163,8 +107,8 @@ proc methodExpectsBody(name: string): bool =
 
 proc request*(conn: HttpConnection, req: HttpRequest, closeConnection=false): Future[HttpResponse] {.async.} =
   await conn.sendRequest(req, closeConnection)
-  return (await conn.readResponse(expectingBody=methodExpectsBody(req.httpMethod)))
+  return conn.readResponse(expectingBody=methodExpectsBody(req.httpMethod))
 
 proc request*(req: HttpRequest): Future[HttpResponse] {.async.} =
   let conn = await newHttpConnection(req)
-  return (await conn.request(req))
+  return conn.request(req)

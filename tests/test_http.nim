@@ -4,7 +4,7 @@ import reactor/http/httpclient
 let chunkedUrl = "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx"
 
 proc main() {.async.} =
-  let resp0 = await request(newHttpRequest("GET", "http://localhost").get)
+  let resp0 = await request(newHttpRequest("GET", url="http://localhost:80"))
   let resp0body = (await resp0.dataInput.readUntilEof())
   echo "finished: ", resp0body
 
@@ -12,17 +12,17 @@ proc main() {.async.} =
   echo "connected"
   await conn.sendRequest(
     newHttpRequest(httpMethod="GET",
-                   path="/", host=nil))
+                   path="/", host=""))
   let resp = await conn.readResponse(expectingBody=true)
   echo resp
-  let resp1 = await resp.dataInput.readSome(1000)
+  let resp1 = await resp.dataInput.readSome(30)
   echo(resp1)
   discard await resp.dataInput.readUntilEof()
   echo "ok"
 
   await conn.sendRequest(
     newHttpRequest(httpMethod="GET",
-                   path="/foo", host=nil))
+                   path="/foo", host=""))
 
   let resp2 = await conn.readResponse(expectingBody=true)
   echo resp2

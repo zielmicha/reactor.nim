@@ -1,4 +1,4 @@
-import reactor/async, reactor/safeuri, tables, strutils, options
+import reactor/async, collections
 
 type
   HeaderTable* = object
@@ -17,6 +17,8 @@ type
     path*: string
     headers*: HeaderTable
     data*: Option[LengthByteInput]
+
+  HttpError* = object of Exception
 
 proc tryParseUint64*(val: string): Result[int64]
 
@@ -63,38 +65,35 @@ proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: He
               httpMethod: httpMethod,
               host: host)
 
-proc newHttpRequest*(httpMethod: string, url: Uri, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]): Result[HttpRequest] =
-  var isSsl = false
-  if url.scheme == "https":
+proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput)): HttpRequest =
+  var isSsl: bool
+  if url.startswith("https://"):
     isSsl = true
-  elif url.scheme == "http":
+  elif url.startswith("http://"):
     isSsl = false
   else:
-    return error(HttpRequest, "invalid schema")
+    raise newException(Exception, "invalid schema")
 
-  let portR = tryParseUint64(url.port)
-  if portR.isError:
-    return error(HttpRequest, portR.error)
+  let (_, rest) = url.split2("://")
+  let s1 = rest.split("/", maxsplit=1)
 
-  var port = portR.get
+  let path = if s1.len == 2: "/" & s1[1] else: "/"
 
-  if port == 0:
-    port = 80
+  let s2 = s1[0].split(":", maxsplit=1)
+
+  let port = if s2.len == 2: parseInt(s2[1]) else: (if isSsl: 443 else: 80)
+  let host = s2[0]
 
   if port <= 0 or port >= 65536:
-    return error(HttpRequest, "invalid port")
+    raise newException(Exception, "invalid port")
 
   HttpRequest(httpMethod: httpMethod,
-              path: url.fullPath,
-              host: url.hostname,
-              port: port.int,
+              path: path,
+              host: host,
+              port: port,
               isSsl: isSsl,
               headers: headers,
-              data: data).just
-
-proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput)): Result[HttpRequest] =
-  let uri = parseUri(url)
-  return newHttpRequest(httpMethod, uri, headers, data)
+              data: data)
 
 proc `$`*(req: HttpResponse): string =
   var headers: seq[string] = @[]
