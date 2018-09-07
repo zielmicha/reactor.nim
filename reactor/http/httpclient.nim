@@ -17,30 +17,20 @@ proc newHttpConnection*(host: string, port=80): Future[HttpConnection] {.async.}
 proc newHttpConnection*(req: HttpRequest): Future[HttpConnection] =
   newHttpConnection(req.host, req.port)
 
-proc makeHeaders(request: HttpRequest): Result[string] =
+proc makeHeaders*(request: HttpRequest): string =
   if not request.httpMethod.hasOnlyChars(Letters + Digits):
-    return error(string, "invalid HTTP method")
+    raise newException(Exception, "invalid HTTP method")
   if not request.path.hasOnlyChars(AllChars - {'\L', '\r', ' '}):
-    return error(string, "invalid HTTP path")
+    raise newException(Exception, "invalid HTTP path")
 
   let path = if request.path == "": "/" else: request.path
-  var header = request.httpMethod & " " & path & " HTTP/1.1" & crlf
-  for key, value in request.headers.pairs:
-    if not key.hasOnlyChars(AllChars - {'\L', '\r', ' '}):
-      return error(string, "invalid header key")
-    if not value.hasOnlyChars(AllChars - {'\L', '\r'}):
-      return error(string, "invalid header value")
-    header &= key & ": " & value & crlf
-  header &= crlf
-  return just(header)
+  result = request.httpMethod & " " & path & " HTTP/1.1" & crlf
+  result &= makeHeaders(request.headers)
 
 proc sendOnlyRequest*(conn: HttpConnection, request: HttpRequest): Future[void] {.async.} =
-  await conn.conn.output.write(makeHeaders(request).get)
+  await conn.conn.output.write(makeHeaders(request))
 
 proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=false): Future[void] {.async.} =
-  if request.data.isSome:
-    request.headers["content-length"] = $(request.data.get.length)
-
   if closeConnection:
     request.headers["connection"] = "close"
 
@@ -52,7 +42,12 @@ proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=fa
 
   await conn.sendOnlyRequest(request)
   if request.data.isSome:
-    await pipeLimited(request.data.get.stream, conn.conn.output, limit=request.data.get.length)
+    if request.dataLength.isSome:
+      request.headers["content-length"] = $(request.dataLength.get)
+      await pipeLimited(request.data.get, conn.conn.output, limit=request.dataLength.get)
+    else:
+      request.headers["transfer-encoding"] = "chunked"
+      await pipeChunked(request.data.get, conn.conn.output)
 
 proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
   var headerSizeLimit = 1024 * 8
@@ -71,11 +66,6 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
   let headers = await readHeaders(conn.conn.input)
 
   return HttpResponse(statusCode: statusCode, headers: headers)
-
-proc readWithContentLength*(conn: HttpConnection, length: int64): ByteInput =
-  let (input, output) = newInputOutputPair[byte]()
-  pipeLimited(conn.conn.input, output, length).onErrorClose(output)
-  return input
 
 proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpResponse] {.async.} =
   let response = await conn.readHeaders()
@@ -96,7 +86,7 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
         asyncRaise newException(HttpError, "content-length too large")
       let length = await tryParseUint64(lengthStr)
 
-      response.dataInput = conn.readWithContentLength(length)
+      response.dataInput = conn.conn.input.readWithContentLength(length)
   else:
     asyncRaise newException(HttpError, "unexpected transfer-encoding")
 

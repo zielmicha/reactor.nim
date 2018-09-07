@@ -28,6 +28,32 @@ proc readChunked*(conn: ByteInput): ByteInput =
   piper().onErrorClose(output)
   return input
 
+proc toNormalHex(x: int): string =
+  const HexChars = "0123456789ABCDEF"
+
+  var x = x
+  if x == 0: return "0"
+
+  while x != 0:
+    result &= HexChars[x mod 16]
+    x = x div 16
+
+  reverse(result)
+
+proc pipeChunked*(src: ByteInput, dst: ByteOutput) {.async.} =
+  while true:
+    let chunkR = tryAwait src.readSome(1024 * 32)
+    if chunkR.isError:
+      await dst.write("0\r\n\r\n")
+      if chunkR.error.getOriginal == JustClose:
+        return
+      else:
+        discard (await chunkR) # reraise
+
+    await dst.write($chunkR.get.len & "\r\n")
+    await dst.write(chunkR.get)
+    await dst.write("\r\n")
+
 proc readHeaders*(conn: ByteInput): Future[HeaderTable] {.async.} =
   var headerSizeLimit = 1024 * 8
 
@@ -62,3 +88,17 @@ proc readHeaders*(conn: ByteInput): Future[HeaderTable] {.async.} =
     lastHeader = line.strip(leading=false).some
 
   return headers
+
+proc makeHeaders*(headers: HeaderTable): string =
+  for key, value in headers.pairs:
+    if not key.hasOnlyChars(AllChars - {'\L', '\r', ' '}):
+      raise newException(HttpError, "invalid header key")
+    if not value.hasOnlyChars(AllChars - {'\L', '\r'}):
+      raise newException(HttpError, "invalid header value")
+    result &= key & ": " & value & crlf
+  result &= crlf
+
+proc readWithContentLength*(conn: ByteInput, length: int64): ByteInput =
+  let (input, output) = newInputOutputPair[byte]()
+  pipeLimited(conn, output, length).onErrorClose(output)
+  return input

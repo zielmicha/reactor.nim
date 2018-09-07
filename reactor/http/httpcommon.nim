@@ -13,10 +13,12 @@ type
     host*: string
     port*: int
     isSsl*: bool
+
     httpMethod*: string
     path*: string
     headers*: HeaderTable
-    data*: Option[LengthByteInput]
+    data*: Option[ByteInput]
+    dataLength*: Option[int64]
 
   HttpError* = object of Exception
 
@@ -57,7 +59,8 @@ proc len*(self: HeaderTable): int =
 #
 
 proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput), port: int=0, isSsl=false): HttpRequest =
-  HttpRequest(data: data,
+  HttpRequest(data: if data.isSome: some(data.get.stream) else: none(ByteInput),
+              dataLength: if data.isSome: some(data.get.length) else: none(int64),
               headers: headers,
               path: path,
               port: port,
@@ -87,13 +90,13 @@ proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initH
   if port <= 0 or port >= 65536:
     raise newException(Exception, "invalid port")
 
-  HttpRequest(httpMethod: httpMethod,
-              path: path,
-              host: host,
-              port: port,
-              isSsl: isSsl,
-              headers: headers,
-              data: data)
+  newHttpRequest(httpMethod = httpMethod,
+                 path = path,
+                 host = host,
+                 port = port,
+                 isSsl = isSsl,
+                 headers = headers,
+                 data = data)
 
 proc `$`*(req: HttpResponse): string =
   var headers: seq[string] = @[]
@@ -150,3 +153,12 @@ proc hasOnlyChars*(val: string, s: set[char]): bool =
     if ch notin s:
       return false
   return true
+
+proc newHttpResponse*(data: string, statusCode: int=200): HttpResponse =
+  var headers = initHeaderTable()
+  headers["content-length"] = $(data.len)
+  return HttpResponse(
+    statusCode: statusCode,
+    headers: headers,
+    dataInput: newConstInput(data),
+  )

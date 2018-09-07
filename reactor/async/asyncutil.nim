@@ -113,11 +113,13 @@ proc pipeLimited*[T](self: Input[T], provider: Output[T], limit: int64, close=tr
 proc newConstInput*[T](val: seq[T]): Input[T] =
   let (stream, provider) = newInputOutputPair[T]()
   provider.sendAll(val).ignore()
+  provider.sendClose(JustClose)
   return stream
 
 proc newConstInput*(val: string): Input[byte] =
   let (stream, provider) = newInputOutputPair[byte]()
   provider.sendAll(val).ignore()
+  provider.sendClose(JustClose)
   return stream
 
 proc newLengthInput*[T](data: seq[T]): LengthInput[T] =

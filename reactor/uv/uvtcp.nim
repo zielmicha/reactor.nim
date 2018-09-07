@@ -65,7 +65,7 @@ proc initClient(self: TcpServer): ptr uv_tcp_t =
   checkZero "tcp_init", uv_tcp_init(getThreadUvLoop(), result)
   checkZero "tcp_nodelay", uv_tcp_nodelay(result, 1)
 
-let localhostAddresses = @[
+let localhostAddresses* = @[
   parseAddress("127.0.0.1"),
   parseAddress("::1"),
 ]
