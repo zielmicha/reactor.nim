@@ -65,7 +65,7 @@ proc newInputOutputPair*[T](bufferSize=0): tuple[input: BufferedInput[T], output
     result.input.marker = 0xDEADBEEF'u32
   result.input.queue = newQueue[T](baseBufferSizeFor(T) * 8)
 
-  result.input.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 32) else: bufferSize
+  result.input.bufferSize = if bufferSize == 0: (baseBufferSizeFor(T) * 64) else: bufferSize
   result.output = BufferedOutput[T](result.input)
 
   newEvent(result.input.onRecvReady)
@@ -75,6 +75,10 @@ proc newPipe*[T](typ: typedesc[T]): tuple[a: Pipe[T], b: Pipe[T]] =
   result = (Pipe[T](), Pipe[T]())
   (result.a.input, result.b.output) = newInputOutputPair[T]()
   (result.b.input, result.a.output) = newInputOutputPair[T]()
+
+proc increaseBufferSize*[T](self: BufferedOutput[T], size: int) =
+  doAssert size >= sself.bufferSize
+  sself.bufferSize = size
 
 proc `onRecvReady`*[T](self: BufferedInput[T]): auto =
   self.onRecvReady

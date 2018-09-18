@@ -4,6 +4,16 @@ import reactor/async, reactor/tcp, reactor/time, collections, reactor/unix
 type
   RedisError* = object of Exception
 
+  RedisClient* = ref object
+    connected: bool
+    readers: Output[proc(): Future[void]]
+    output: ByteOutput
+    input: ByteInput
+    sendMutex: AsyncMutex
+    connectProc: (proc(): Future[BytePipe])
+    reconnectFlag: bool
+    password: string
+
 proc readError(input: ByteInput): Future[ref RedisError] {.async.} =
   let excString = (await input.readLine()).strip()
   return newException(RedisError, excString)
@@ -79,70 +89,46 @@ proc serialize*(output: ByteOutput, val: string): Future[void] {.async.} =
   await output.write(val)
   await output.write("\r\n")
 
-type
-  RedisClient* = ref object
-    pipe*: BytePipe
-    sendMutex: AsyncMutex
-    connectProc: (proc(client: RedisClient): Future[void])
-    reconnectFlag: bool
+proc wrapRedis*(connectProc: (proc(): Future[BytePipe]), password="", reconnect=false): RedisClient =
+  ## Create Redis client from existing connection.
+  RedisClient(sendMutex: newAsyncMutex(), connectProc: connectProc, password: password, reconnectFlag: reconnect)
 
-proc wrapRedis*(connectProc: (proc(client: RedisClient): Future[void]), reconnect=false): RedisClient =
-  ## Create Redis client from existing connection. connectProc should assign connection to `pipe` attribute of `client`.
-  RedisClient(sendMutex: newAsyncMutex(), connectProc: connectProc, reconnectFlag: reconnect)
+proc maybeReconnect(client: RedisClient) {.async.}
 
-proc reconnect*(client: RedisClient) {.async.} =
-  if client.pipe != nil:
-    client.pipe.close JustClose
-
-  while true:
-    let fut = (client.connectProc)(client)
-    let ret = tryAwait fut
-    if ret.isError:
-      stderr.writeLine("connection to Redis failed: " & ($ret))
-      await asyncSleep(1000)
-    else:
-      break
-
-proc maybeReconnect(client: RedisClient) {.async.} =
-  if not client.reconnectFlag and client.pipe != nil:
-    return
-
-  await client.reconnect
-
-proc isConnected*(client: RedisClient): bool =
-  return client.pipe != nil and not client.pipe.output.isRecvClosed
+proc disconnect(client: RedisClient) =
+  client.output.sendClose JustClose
+  client.readers.sendClose JustClose
 
 proc call*[R](client: RedisClient, cmd: seq[string], resp: typedesc[R], lock=true): Future[R] {.async.} =
   ## Perform a Redis call.
-  when defined(timeRedis):
-    let start = epochTime()
-
-  if lock:
-    await client.sendMutex.lock
-  if not client.isConnected:
-    await client.maybeReconnect()
-
   var resp: Future[R]
 
-  asyncDefer:
-    if lock:
-      client.sendMutex.unlock # correct?
-
   when defined(debugRedis):
-    stderr.writeLine "write " & $cmd
-  await client.pipe.output.serialize(cmd)
-  resp = unserialize(client.pipe.input, R)
+    stderr.writeLine "call " & $cmd
+
+  await client.maybeReconnect
+
+  let completer = newCompleter[R]()
+
+  proc reader() {.async.} =
+    let res = tryAwait unserialize(client.input, R)
+    completer.complete(res)
+
+  await client.sendMutex.lock
+  let fut1 = tryAwait client.readers.send(reader)
+  let fut2 = tryAwait client.output.serialize(cmd)
+  client.sendMutex.unlock
+
+  if fut1.isError or fut2.isError:
+    client.disconnect
+
+  fut1.get
+  fut2.get
 
   when R is void:
-    await resp
+    await completer.getFuture
   else:
-    let val = (await resp)
-
-  when defined(timeRedis):
-    echo cmd[0], " took ", (epochTime() - start) * 1000, " ms"
-
-  when R is not void:
-    return val
+    return completer.getFuture
 
 macro defCommand*(sname: untyped, args: untyped, rettype: untyped): untyped =
   let name = newIdentNode(sname.strVal.toLowerAscii)
@@ -211,56 +197,100 @@ proc expectSubscribeConfirmation(input: ByteInput) {.async.} =
   else:
     asyncRaise newException(RedisError, "unexpected type")
 
-proc pubsubStart(client: RedisClient, channels: seq[string]) {.async.} =
-  await client.pipe.output.serialize(@["SUBSCRIBE"] & channels)
+proc pubsubStart(pipe: BytePipe, channels: seq[string]) {.async.} =
+  await pipe.output.serialize(@["SUBSCRIBE"] & channels)
 
   for ch in channels:
-    await client.pipe.input.expectSubscribeConfirmation()
+    await pipe.input.expectSubscribeConfirmation()
 
-proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage] {.asynciterator.} =
+proc connectPubsub*(connectProc: (proc(): Future[BytePipe]), password: string, channels: seq[string]): Input[RedisMessage] {.asynciterator.} =
   ## Start listening for PUBSUB messages on channels `channels`.
-  var reconnect = false
+  var pipe: BytePipe = nil
   while true:
-    if client.pipe == nil or client.pipe.output.isRecvClosed or reconnect:
-      if not client.reconnectFlag and client.pipe != nil:
-        asyncRaise "socket closed"
+    if pipe == nil or pipe.output.isRecvClosed:
+      pipe = await connectProc()
+      if password != "":
+        await pipe.output.serialize(@["AUTH", password])
+        await pipe.input.unserialize(void)
 
-      await client.maybeReconnect()
-      reconnect = false
-      if (tryAwait client.pubsubStart(channels)).isError:
+      if (tryAwait pipe.pubsubStart(channels)).isError:
         stderr.writeLine "Could not start pubsub channel"
         await asyncSleep(500)
-        reconnect = true
         continue
 
-    let fut: Future[seq[string]] = unserialize(client.pipe.input, seq[string])
+    let fut: Future[seq[string]] = unserialize(pipe.input, seq[string])
     let respR = tryAwait fut
     if respR.isError:
       stderr.writeLine("pubsub channel disconnected (" & $respR & ")")
       await asyncSleep(500)
-      reconnect = true
+      pipe.close
       continue
 
     let resp: seq[string] = respR.get
     if resp[0] == "message":
       asyncYield RedisMessage(channel: resp[1], message: resp[2])
 
+proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage]=
+  return connectPubsub(client.connectProc, client.password, channels)
 
-proc connectProc(client: RedisClient, address: string, password: string) {.async.} =
-  var x: BytePipe
-  if address.startswith("/"):
-    x = await connectUnix(address)
-  else:
-    x = await connectTcp(if ":" in address: address else: address & ":6379")
+proc doReconnect(client: RedisClient) {.async.} =
+  let x = await client.connectProc()
 
-  client.pipe = x
-  if password != "":
-    await client.call(@["AUTH", password], void, lock=false)
+  if client.password != "":
+    await x.output.serialize(@["AUTH", client.password])
+    await x.input.unserialize(void)
+
+  client.output = x.output
+  client.input = x.input
+  client.connected = true
+  var readersIn: Input[proc():Future[void]]
+  (readersIn, client.readers) = newInputOutputPair[proc():Future[void]]()
+
+  proc reader() {.async.} =
+    asyncFor reader in readersIn:
+      await reader()
+
+  reader().onErrorClose(readersIn)
+
+proc reconnect*(client: RedisClient, maybe=false) {.async.} =
+  await client.sendMutex.lock
+  asyncDefer: client.sendMutex.unlock
+
+  if maybe:
+    if client.connected:
+      return
+
+    if not client.reconnectFlag and client.input != nil:
+      return
+
+  if client.connected:
+    client.output.sendClose JustClose
+    client.readers.sendClose JustClose
+
+  while true:
+    let fut = client.doReconnect()
+    let ret = tryAwait fut
+    if ret.isError:
+      stderr.writeLine("connection to Redis failed: " & ($ret))
+      await asyncSleep(1000)
+    else:
+      break
+
+proc maybeReconnect(client: RedisClient) {.async.} =
+  await client.reconnect(maybe=true)
 
 proc connect*(address = "", password = "", reconnect=false): RedisClient =
   ## Connect to Redis TCP instance.
 
-  return wrapRedis((proc(client: RedisClient): Future[void] = connectProc(client, address, password)), reconnect=reconnect)
+  proc connectProc(): Future[BytePipe] {.async.} =
+    when defined(debugRedis):
+      echo "connect to Redis at ", address
+    if address.startswith("/"):
+      return connectUnix(address).then(x => x.BytePipe)
+    else:
+      return connectTcp(if ":" in address: address else: address & ":6379").then(x => x.BytePipe)
+
+  return wrapRedis(connectProc, password, reconnect=reconnect)
 
 proc connect*(host: string, port: int, password: string = "", reconnect=false): RedisClient =
   ## Connect to Redis TCP instance.
