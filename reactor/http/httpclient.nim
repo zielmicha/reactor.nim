@@ -102,3 +102,7 @@ proc request*(conn: HttpConnection, req: HttpRequest, closeConnection=false): Fu
 proc request*(req: HttpRequest): Future[HttpResponse] {.async.} =
   let conn = await newHttpConnection(req)
   return conn.request(req)
+
+proc raiseForStatus*(resp: HttpResponse) =
+  if resp.statusCode >= 400:
+    raise newException(Exception, "HTTP request returned $1 error code" % [$resp.statusCode])

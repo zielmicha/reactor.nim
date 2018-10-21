@@ -50,7 +50,7 @@ proc pipeChunked*(src: ByteInput, dst: ByteOutput) {.async.} =
       else:
         discard (await chunkR) # reraise
 
-    await dst.write($chunkR.get.len & "\r\n")
+    await dst.write(toNormalHex(chunkR.get.len) & "\r\n")
     await dst.write(chunkR.get)
     await dst.write("\r\n")
 

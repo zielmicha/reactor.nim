@@ -48,14 +48,21 @@ proc readRequest*(conn: ByteInput): Future[HttpRequest] {.async.} =
   return req
 
 proc runHttpServer*(conn: BytePipe, callback: proc(req: HttpRequest): Future[HttpResponse]) {.async.} =
+  defer: conn.close
+
   while true:
-    let req = await conn.input.readRequest()
+    let reqR = tryAwait conn.input.readRequest()
+    if reqR.isError:
+      break
+
+    let req = reqR.get
     let resp = await callback(req)
     await conn.output.writeResponse(resp)
 
     # make sure request body is read fully
     if req.data.isSome:
-      discard (await req.data.get.readUntilEof())
+      let e = (tryAwait req.data.get.readUntilEof())
+      if e.isError: break
 
 proc runHttpServer*(port: int, addresses: seq[IpAddress]=localhostAddresses, callback: proc(req: HttpRequest): Future[HttpResponse]) {.async.} =
   let server = await createTcpServer(port, addresses)

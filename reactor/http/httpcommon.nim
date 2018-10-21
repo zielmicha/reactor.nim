@@ -99,12 +99,14 @@ proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initH
                  data = data)
 
 proc `$`*(req: HttpResponse): string =
+  if req == nil: return "nil"
   var headers: seq[string] = @[]
   for k, v in req.headers:
     headers.add("$1='$2'" % [k, v])
   return "HttpResponse(statusCode=$1, headers={$2})" % [$req.statusCode, headers.join(", ")]
 
 proc `$`*(req: HttpRequest): string =
+  if req == nil: return "nil"
   var headers: seq[string] = @[]
   for k, v in req.headers:
     headers.add("$1='$2'" % [k, v])
@@ -154,8 +156,16 @@ proc hasOnlyChars*(val: string, s: set[char]): bool =
       return false
   return true
 
-proc newHttpResponse*(data: string, statusCode: int=200): HttpResponse =
-  var headers = initHeaderTable()
+func query*(r: HttpRequest): string =
+  return if '?' in r.path: "?" & r.path.split('?')[1] else: ""
+
+func splitPath*(r: HttpRequest): seq[string] =
+  result = r.path.split('?')[0][1..^1].split('/')
+  if result.len > 0 and result[^1] == "":
+     discard result.pop
+
+proc newHttpResponse*(data: string, statusCode: int=200, headers=initHeaderTable()): HttpResponse =
+  var headers = headers
   headers["content-length"] = $(data.len)
   return HttpResponse(
     statusCode: statusCode,
