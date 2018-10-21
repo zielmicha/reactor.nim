@@ -41,9 +41,8 @@ proc readRequest*(conn: ByteInput): Future[HttpRequest] {.async.} =
     if req.headers["content-length"].len > 19:
       raise newException(HttpError, "content-length too large")
 
-    let length = tryParseUint64(req.headers["content-length"]).get
+    let length = parseBiggestInt(req.headers["content-length"])
     req.data = some(conn.readWithContentLength(length))
-    req.dataLength = some(length)
 
   return req
 

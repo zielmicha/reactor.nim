@@ -42,9 +42,9 @@ proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=fa
 
   await conn.sendOnlyRequest(request)
   if request.data.isSome:
-    if request.dataLength.isSome:
-      request.headers["content-length"] = $(request.dataLength.get)
-      await pipeLimited(request.data.get, conn.conn.output, limit=request.dataLength.get)
+    if "content-length" in request.headers:
+      let length = request.headers["content-length"]
+      await pipeLimited(request.data.get, conn.conn.output, limit=parseBiggestInt(length))
     else:
       request.headers["transfer-encoding"] = "chunked"
       await pipeChunked(request.data.get, conn.conn.output)

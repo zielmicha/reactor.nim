@@ -4,7 +4,7 @@ import reactor/async, reactor/http/httpclient, reactor/http/httpcommon
 # The "real" return type of main is Future[void].
 proc main() {.async.} =
   # we use ``await`` to wait for a Future[HttpResponse] to finish
-  let resp = await request(newHttpRequest("GET", "http://google.com/").get)
+  let resp = await request(newHttpRequest("GET", url="http://google.com/"))
   echo "code: ", resp.statusCode
   # resp.dataInput is of type ByteInput
   let body = resp.dataInput

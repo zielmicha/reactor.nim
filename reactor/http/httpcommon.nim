@@ -18,7 +18,6 @@ type
     path*: string
     headers*: HeaderTable
     data*: Option[ByteInput]
-    dataLength*: Option[int64]
 
   HttpError* = object of Exception
 
@@ -58,17 +57,33 @@ proc len*(self: HeaderTable): int =
 
 #
 
-proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput), port: int=0, isSsl=false): HttpRequest =
-  HttpRequest(data: if data.isSome: some(data.get.stream) else: none(ByteInput),
-              dataLength: if data.isSome: some(data.get.length) else: none(int64),
+proc makeData(x: ByteInput, headers: var HeaderTable): Option[ByteInput] =
+  return some(x)
+
+proc makeData(x: LengthByteInput, headers: var HeaderTable): Option[ByteInput] =
+  headers["content-length"] = $(x.length)
+  return some(x.stream)
+
+proc makeData(x: string, headers: var HeaderTable): Option[ByteInput] =
+  return makeData(newLengthInput(x), headers)
+
+proc makeData(x: Option, headers: var HeaderTable): Option[ByteInput] =
+  if x.isSome:
+    return makeData(x.get, headers)
+  else:
+    return none(ByteInput)
+
+proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: HeaderTable=initHeaderTable(), data: any=none(string), port: int=0, isSsl=false): HttpRequest =
+  result = HttpRequest(
               headers: headers,
               path: path,
               port: port,
               isSsl: isSsl,
               httpMethod: httpMethod,
               host: host)
+  result.data = makeData(data, result.headers)
 
-proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: Option[LengthByteInput]=none(LengthByteInput)): HttpRequest =
+proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: any=none(string)): HttpRequest =
   var isSsl: bool
   if url.startswith("https://"):
     isSsl = true
