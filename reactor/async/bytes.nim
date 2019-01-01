@@ -6,8 +6,6 @@ type
   ByteOutput* = Output[byte]
   LengthByteInput* = LengthInput[byte]
 
-{.deprecated: [ByteStream: ByteInput, ByteProvider: ByteOutput, LengthByteStream: LengthByteInput].}
-
 proc read*(self: Input[byte], count: int): Future[string] =
   ## Reads exactly `count` bytes from stream. Raises error if stream is closed before it manages to read them.
   self.receiveChunk(count, count, string)
@@ -31,11 +29,11 @@ proc readChunkPrefixed*(self: Input[byte], sizeEndian=bigEndian): Future[string]
   ## Read chunk of text prefixed by 4 byte length
   let length = await self.readItem(uint32, sizeEndian)
   if length > uint32(128 * 1024 * 1024):
-    asyncRaise("length too big")
+    asyncRaise("length too big ($1)" % $length)
   asyncReturn(await self.read(length.int))
 
 proc readBufferPrefixed*(self: Input[byte], sizeEndian=bigEndian): Future[Buffer] {.async.} =
-  let data = await readChunkPrefixed(self)
+  let data = await readChunkPrefixed(self, sizeEndian)
   return newView(data)
 
 proc readChunksPrefixed*(self: Input[byte], sizeEndian=bigEndian): Input[string] =

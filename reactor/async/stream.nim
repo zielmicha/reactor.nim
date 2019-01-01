@@ -410,7 +410,7 @@ proc pipeChunks*[T, R](self: BufferedInput[T], target: BufferedOutput[R], functi
         let doSend = target.freeBufferSize()
         var buffer: seq[R]
         function(view, buffer)
-        didSend = target.sendSome(buffer.seqView)
+        didSend = target.sendSome(unsafeInitView(addr buffer[0], buffer.len))
 
       self.discardItems(didSend)
       if didSend == 0: break
@@ -497,6 +497,18 @@ proc logClose*(err: ref Exception) =
     stderr.writeLine("Closing stream: " & err.msg)
 
 # errorOnClose -> onErrorClose
+
+proc onFinishClose*(f: Future[void], p: BufferedOutput) =
+  ## When future f completes, close provider p.
+  f.onSuccessOrError(
+    onSuccess=proc() = p.sendClose(JustClose),
+    onError=proc(t: ref Exception) = p.sendClose(t))
+
+proc onFinishClose*(f: Future[void], s: BufferedInput) =
+  ## When future f completes, close stream s.
+  f.onSuccessOrError(
+    onSuccess=proc() = s.recvClose(JustClose),
+    onError=proc(t: ref Exception) = s.recvClose(t))
 
 proc onErrorClose*(f: Future[void], p: BufferedOutput) =
   ## When future f completes with error, close provider p.
