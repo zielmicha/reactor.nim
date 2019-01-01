@@ -32,13 +32,16 @@ converter headerTable*(arr: openarray[tuple[k: string, v: string]]): HeaderTable
 proc initHeaderTable*(): HeaderTable =
   result.headers = initTable[string, string]()
 
+proc del*(self: var HeaderTable, key: string) =
+  self.headers.del key.strip.toLowerAscii
+
 proc `[]`*(self: HeaderTable, key: string): string =
   return self.headers[key.strip.toLowerAscii]
 
 proc `[]=`*(self: var HeaderTable, key: string, value: string) =
   self.headers[key.strip.toLowerAscii] = value.strip
 
-proc getOrDefault*(self: HeaderTable, key: string, defaultVal: string): string =
+proc getOrDefault*(self: HeaderTable, key: string, defaultVal: string=""): string =
   var key = key.strip.toLowerAscii
   if key notin self.headers:
     return defaultVal
@@ -84,13 +87,16 @@ proc newHttpRequest*(httpMethod: string, path: string, host: string, headers: He
   result.data = makeData(data, result.headers)
 
 proc newHttpRequest*(httpMethod: string, url: string, headers: HeaderTable=initHeaderTable(), data: any=none(string)): HttpRequest =
+  if url.startswith("/"):
+    return newHttpRequest(httpMethod, path=url, host="", headers=headers, data=data)
+
   var isSsl: bool
   if url.startswith("https://"):
     isSsl = true
   elif url.startswith("http://"):
     isSsl = false
   else:
-    raise newException(Exception, "invalid schema")
+    raise newException(Exception, "invalid schema ($1)" % url)
 
   let (_, rest) = url.split2("://")
   let s1 = rest.split("/", maxsplit=1)
@@ -172,12 +178,56 @@ proc hasOnlyChars*(val: string, s: set[char]): bool =
   return true
 
 func query*(r: HttpRequest): string =
-  return if '?' in r.path: "?" & r.path.split('?')[1] else: ""
+  return if '?' in r.path: "?" & r.path.split('?', 1)[1] else: ""
 
 func splitPath*(r: HttpRequest): seq[string] =
   result = r.path.split('?')[0][1..^1].split('/')
   if result.len > 0 and result[^1] == "":
      discard result.pop
+
+proc encode(s: string): string =
+  const allowed = {'a'..'z', 'A'..'Z', '0'..'9', '-', '.', '_', '~'}
+  for ch in s:
+    if ch in allowed:
+      result &= ch
+    else:
+      result &= '%'
+      result &= toHex(ord(ch), 2)
+
+proc decode(s: string): string =
+  var i = 0
+  while i < s.len:
+    if s[i] == '%' and i+3 < s.len:
+      result.add parseHexInt(s[i+1..i+3]).char
+      i += 3
+    else:
+      result.add s[i]
+      i += 1
+
+proc encodeQuery*(r: openarray[(string, string)]): string =
+  if r.len == 0: return ""
+  for item in r:
+    result &= encode(item[0])
+    result &= "="
+    result &= encode(item[1])
+    result &= "&"
+
+  result.setLen(result.len - 1)
+
+proc decodeQuery*(r: string): seq[(string, string)] =
+  var r = r
+  if r.len == 0: return @[]
+  if r.startswith("?"): r = r[1..^1]
+  for item in r.split("&"):
+    let v = item.split("=", 1)
+    if v.len > 1:
+      result.add((decode(v[0]), decode(v[1])))
+
+proc getQueryParam*(r: HttpRequest, key: string): string =
+  for item in decodeQuery(r.query):
+    if item[0] == key: return item[1]
+
+  return ""
 
 proc newHttpResponse*(data: string, statusCode: int=200, headers=initHeaderTable()): HttpResponse =
   var headers = headers

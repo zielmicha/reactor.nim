@@ -2,9 +2,9 @@ import reactor/async, reactor/http/httpcommon, reactor/http/httpclient, options
 
 type
   HttpSession* = ref object
-    conn: HttpConnection
+    connectionFactory: (proc(r: HttpRequest): Future[HttpConnection])
+    transformRequest: (proc(r: HttpRequest))
     baseUrl: string
-    headers: HeaderTable
 
 proc defaultHttpSession(): HttpSession =
   return nil
@@ -15,11 +15,22 @@ proc defaultIfNil(sess: HttpSession): HttpSession =
   else:
     return sess
 
-proc request*(sess: HttpSession, httpMethod: string, url: string, data=none(string), headers=initHeaderTable()): Future[HttpResponse] {.async.} =
-  let sess = defaultIfNil(sess)
-  var finHeaders = sess.headers
-  for k, v in headers:
-    finHeaders[k] = v
+proc createHttpSession*(connectionFactory: (proc(r: HttpRequest): Future[HttpConnection]),
+                       transformRequest: (proc(r: HttpRequest))): HttpSession =
+  return HttpSession(connectionFactory: connectionFactory, transformRequest: transformRequest)
 
-  let finUrl = sess.baseUrl & url
-  newHttpRequest(httpMethod, finUrl, headers, data)
+proc createRequest*(sess: HttpSession, req: HttpRequest): HttpRequest =
+  let newReq = new(HttpRequest)
+  newReq[] = req[]
+  let sess = defaultIfNil(sess)
+  sess.transformRequest(newReq)
+  return newReq
+
+proc makeConnection*(sess: HttpSession, req: HttpRequest): Future[HttpConnection] {.async.} =
+  return sess.connectionFactory(req)
+
+proc request*(sess: HttpSession, httpMethod: string, url: string, data: any=none(string), headers=initHeaderTable()): Future[HttpResponse] {.async.} =
+  let req = newHttpRequest(httpMethod, url, headers, data)
+  let conn = await sess.makeConnection(req)
+  # defer: conn.conn.close (?)
+  return conn.request(sess.createRequest(req))

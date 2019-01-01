@@ -5,10 +5,20 @@ proc writeHeaders*(conn: ByteOutput, response: HttpResponse): Future[void] {.asy
   await conn.write("HTTP/1.1 " & $response.statusCode & " -" & crlf)
   await conn.write(makeHeaders(response.headers))
 
-proc writeResponse*(conn: ByteOutput, response: HttpResponse): Future[void] {.async.} =
-  response.headers["transfer-encoding"] = "chunked"
-  await conn.writeHeaders(response)
-  await pipeChunked(response.dataInput, conn)
+proc writeResponse*(conn: ByteOutput, response: HttpResponse, close=false): Future[void] {.async.} =
+  if response.headers.getOrDefault("connection") == "upgrade":
+    await conn.writeHeaders(response)
+    await pipe(response.dataInput, conn)
+    conn.sendClose
+  else:
+    if close:
+      response.headers["connection"] = "close"
+      await conn.writeHeaders(response)
+      await pipe(response.dataInput, conn)
+    else:
+      response.headers["transfer-encoding"] = "chunked"
+      await conn.writeHeaders(response)
+      await pipeChunked(response.dataInput, conn)
 
 proc readRequestHeaders*(conn: ByteInput): Future[HttpRequest] {.async.} =
   let line = await conn.readLine(limit=1024 * 8)
@@ -43,6 +53,8 @@ proc readRequest*(conn: ByteInput): Future[HttpRequest] {.async.} =
 
     let length = parseBiggestInt(req.headers["content-length"])
     req.data = some(conn.readWithContentLength(length))
+  elif req.headers.getOrDefault("connection", "") == "upgrade":
+    req.data = some(conn)
 
   return req
 

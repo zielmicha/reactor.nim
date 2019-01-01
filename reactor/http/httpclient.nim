@@ -5,7 +5,7 @@ export httpcommon, httpimpl
 type
   HttpConnection* = ref object
     defaultHost: string
-    conn: BytePipe
+    conn*: BytePipe
 
 proc newHttpConnection*(conn: BytePipe, defaultHost: string): Future[HttpConnection] {.async} =
   return HttpConnection(conn: conn, defaultHost: defaultHost)
@@ -44,14 +44,16 @@ proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=fa
   if request.data.isSome:
     if "content-length" in request.headers:
       let length = request.headers["content-length"]
-      await pipeLimited(request.data.get, conn.conn.output, limit=parseBiggestInt(length))
+      await pipeLimited(request.data.get, conn.conn.output, limit=parseBiggestInt(length), close=false)
+    elif request.headers.getOrDefault("connection", "") == "upgrade":
+      await pipe(request.data.get, conn.conn.output)
     else:
       request.headers["transfer-encoding"] = "chunked"
       await pipeChunked(request.data.get, conn.conn.output)
 
-proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
+proc readResponseHeaders*(conn: ByteInput): Future[HttpResponse] {.async.} =
   var headerSizeLimit = 1024 * 8
-  let line = await conn.conn.input.readLine(limit=headerSizeLimit)
+  let line = await conn.readLine(limit=headerSizeLimit)
   if not line.endsWith("\L"): raise newException(HttpError, "status line too long")
 
   let statusSplit = line.strip().split(' ')
@@ -63,16 +65,20 @@ proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
     asyncRaise newException(HttpError, "invalid status code")
 
   let statusCode = statusSplit[1].parseInt
-  let headers = await readHeaders(conn.conn.input)
+  let headers = await readHeaders(conn)
 
   return HttpResponse(statusCode: statusCode, headers: headers)
 
-proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpResponse] {.async.} =
-  let response = await conn.readHeaders()
+proc readHeaders*(conn: HttpConnection): Future[HttpResponse] {.async.} =
+  return conn.conn.input.readResponseHeaders
 
-  if not expectingBody:
-    return response
+proc parseHeaders*(s: string): Future[HttpResponse] {.async.} =
+  doAssert "\r\L\r\L" notin s
+  let inp = newConstInput(s)
+  let headers = readResponseHeaders(inp)
+  return headers
 
+proc readResponseBody*(conn: HttpConnection, response: HttpResponse) {.async.} =
   let te = response.headers.getOrDefault("transfer-encoding", "")
   if te == "chunked":
     response.dataInput = conn.conn.input.readChunked()
@@ -89,6 +95,14 @@ proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpRespons
       response.dataInput = conn.conn.input.readWithContentLength(length)
   else:
     asyncRaise newException(HttpError, "unexpected transfer-encoding")
+
+proc readResponse*(conn: HttpConnection, expectingBody=true): Future[HttpResponse] {.async.} =
+  let response = await conn.readHeaders()
+
+  if not expectingBody:
+    return response
+
+  await conn.readResponseBody(response)
 
   return response
 
