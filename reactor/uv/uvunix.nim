@@ -2,7 +2,7 @@
 import reactor/util
 import reactor/loop
 import reactor/async
-import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, reactor/uv/errno, reactor/uv/uvlisten
+import reactor/uv/uv, reactor/uv/uvutil, reactor/uv/uvstream, reactor/uv/errno, reactor/uv/uvlisten, posix
 
 type
   UnixConnection* = ref object of uvstream.UvPipe
@@ -45,8 +45,14 @@ proc initClient(self: UnixServer): ptr uv_tcp_t =
   result = cast[ptr uv_pipe_t](newUvHandle(UV_NAMED_PIPE))
   checkZero "pipe_init", uv_pipe_init(getThreadUvLoop(), result, if self.allowFdPassing: 1.cint else: 0.cint)
 
-proc createUnixServer*(path: string, allowFdPassing=false): UnixServer =
+proc createUnixServer*(path: string, allowFdPassing=false, reuse=true): UnixServer =
   assert len(path) < 92
+
+  if reuse:
+    var s: Stat
+    if stat(path, s) == 0 and S_ISSOCK(s.st_mode):
+      discard unlink(path)
+
   let server = cast[ptr uv_pipe_t](newUvHandle(UV_NAMED_PIPE))
   checkZero "pipe_init", uv_pipe_init(getThreadUvLoop(), server, if allowFdPassing: 1.cint else: 0.cint)
   let bindErr = uv_pipe_bind(server, path)
