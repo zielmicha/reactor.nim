@@ -22,6 +22,8 @@ proc makeRawArray(args: var seq[string], start=0): seq[pointer] =
 
 var SOCK_CLOEXEC* {.importc, header: "<sys/socket.h>".}: cint
 
+const processStdioFiles* = @[(0.cint,0.cint),(1.cint,1.cint),(2.cint,2.cint)]
+
 proc startProcess*(command: seq[string],
                    environ: TableRef[string, string]=nil,
                    additionalEnv: openarray[tuple[k: string, v: string]]=[],
