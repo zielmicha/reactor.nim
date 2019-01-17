@@ -185,7 +185,7 @@ func splitPath*(r: HttpRequest): seq[string] =
   if result.len > 0 and result[^1] == "":
      discard result.pop
 
-proc encode(s: string): string =
+proc urlEncode*(s: string): string =
   const allowed = {'a'..'z', 'A'..'Z', '0'..'9', '-', '.', '_', '~'}
   for ch in s:
     if ch in allowed:
@@ -194,7 +194,7 @@ proc encode(s: string): string =
       result &= '%'
       result &= toHex(ord(ch), 2)
 
-proc decode(s: string): string =
+proc urlDecode*(s: string): string =
   var i = 0
   while i < s.len:
     if s[i] == '%' and i+3 < s.len:
@@ -207,9 +207,9 @@ proc decode(s: string): string =
 proc encodeQuery*(r: openarray[(string, string)]): string =
   if r.len == 0: return ""
   for item in r:
-    result &= encode(item[0])
+    result &= urlEncode(item[0])
     result &= "="
-    result &= encode(item[1])
+    result &= urlEncode(item[1])
     result &= "&"
 
   result.setLen(result.len - 1)
@@ -221,7 +221,7 @@ proc decodeQuery*(r: string): seq[(string, string)] =
   for item in r.split("&"):
     let v = item.split("=", 1)
     if v.len > 1:
-      result.add((decode(v[0]), decode(v[1])))
+      result.add((urlDecode(v[0]), urlDecode(v[1])))
 
 proc getQueryParam*(r: HttpRequest, key: string): string =
   for item in decodeQuery(r.query):
