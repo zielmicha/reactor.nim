@@ -197,8 +197,8 @@ proc urlEncode*(s: string): string =
 proc urlDecode*(s: string): string =
   var i = 0
   while i < s.len:
-    if s[i] == '%' and i+3 < s.len:
-      result.add parseHexInt(s[i+1..i+3]).char
+    if s[i] == '%' and i+2 < s.len:
+      result.add parseHexInt(s[i+1..i+2]).char
       i += 3
     else:
       result.add s[i]
