@@ -1,0 +1,26 @@
+# Go
+# Build your Go project.
+# Add steps that test, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/go
+
+trigger:
+- master
+
+pool:
+  vmImage: 'Ubuntu-16.04'
+
+variables:
+  modulePath: '$(system.defaultWorkingDirectory)/reactor.nim' # Path to the module's code
+
+steps:
+- script: |
+    apt-get install -y xz-utils
+    wget https://nim-lang.org/choosenim/init.sh
+    bash init.sh -y
+  displayName: 'Set up Nim'
+
+- script: |
+    cd reactor.nim
+    nim c reactor
+  workingDirectory: '$(modulePath)'
+  displayName: 'Get dependencies, then build'
