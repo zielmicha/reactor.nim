@@ -11,16 +11,14 @@ pool:
 
 variables:
   modulePath: '$(system.defaultWorkingDirectory)/reactor.nim' # Path to the module's code
+  dockerImage: nimlang/nim:0.19.0-ubuntu
 
 steps:
 - script: |
-    apt-get install -y xz-utils
-    wget https://nim-lang.org/choosenim/init.sh
-    bash init.sh -y
+    docker pull $dockerImage
   displayName: 'Set up Nim'
 
 - script: |
-    cd reactor.nim
-    nim c reactor
+    docker run $dockerImage -v $PWD:/root bash -c 'cd /root/reactor.nim; nim c reactor.nim'
   workingDirectory: '$(modulePath)'
   displayName: 'Get dependencies, then build'
