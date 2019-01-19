@@ -18,5 +18,5 @@ steps:
   displayName: 'Set up Nim'
 
 - script: |
-    docker run nimlang/nim:0.19.0-ubuntu -v $PWD:/root bash -c 'cd /root/reactor.nim; nim c reactor.nim'
+    docker run -v $PWD:/root nimlang/nim:0.19.0-ubuntu bash -c 'cd /root/reactor.nim; nim c reactor.nim'
   displayName: 'Build'
