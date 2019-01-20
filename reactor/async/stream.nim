@@ -117,10 +117,11 @@ proc sendSome*[T](self: BufferedOutput[T], data: View[T]): int =
   return doPush
 
 proc sendAllSlow[T](self: BufferedOutput[T], data: seq[T]|string|View[T],
-                    dataView: View[T], offset: int): Future[void] =
+                    offset: int): Future[void] =
   let completer = newCompleter[void]()
   var offset = offset
   var sendListenerId: CallbackId
+  var data = data
 
   sendListenerId = self.onSendReady.addListener(proc() =
     if sself.sendClosed:
@@ -132,7 +133,7 @@ proc sendAllSlow[T](self: BufferedOutput[T], data: seq[T]|string|View[T],
       self.onSendReady.removeListener sendListenerId
       return
 
-    offset += self.sendSome(dataView.slice(offset))
+    offset += self.sendSome(unsafeInitView(data).slice(offset))
     if offset == data.len:
       completer.complete()
       self.onSendReady.removeListener sendListenerId)
@@ -158,7 +159,7 @@ proc sendAll*[T](self: BufferedOutput[T], data: seq[T]|string|View[T]): Future[v
   if offset == data.len:
     return now(just())
   else:
-    return sendAllSlow(self, data, dataView, offset)
+    return sendAllSlow(self, data, offset)
 
 proc maybeSend*[T](self: BufferedOutput[T], item: T): bool =
   return self.sendSome(unsafeInitView(unsafeAddr item, 1)) == 1
