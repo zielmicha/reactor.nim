@@ -10,7 +10,7 @@ Error in ignored future
 Asynchronous trace:
 test_streams_close.nim(47) test3
 
-Error: reader closed [Exception]"""
+Error: reader closed []"""
 
 import reactor/async, reactor/loop
 

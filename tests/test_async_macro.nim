@@ -11,7 +11,7 @@ Error in ignored future
 Asynchronous trace:
 test_async_macro.nim(28) add5
 
-Error: boom! [Exception]"""
+Error: boom! []"""
 
 import reactor/async, reactor/loop
 

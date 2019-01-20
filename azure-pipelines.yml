@@ -8,7 +8,7 @@ pool:
   vmImage: 'Ubuntu-16.04'
 
 variables:
-  modulePath: '$(system.defaultWorkingDirectory)/reactor.nim' # Path to the module's code
+  modulePath: '$(system.defaultWorkingDirectory)' # Path to the module's code
 
 steps:
 - script: |
@@ -16,5 +16,5 @@ steps:
   displayName: 'Set up Nim'
 
 - script: |
-    docker run -v $PWD:/root nimlang/nim:0.19.0-ubuntu bash -c 'set -e; apt-get update; apt-get install -y python3; cd /root/reactor.nim; nimble install -y; ./bin/runtests.py'
+    docker run -v $PWD:/root/code nimlang/nim:0.19.0-ubuntu bash -c 'set -e; apt-get update; apt-get install -y python3; cd /root/code; nimble install -y || true; ./bin/runtests.py'
   displayName: 'Build'
