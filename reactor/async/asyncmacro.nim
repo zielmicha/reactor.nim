@@ -113,7 +113,11 @@ macro async*(a): untyped =
   let body = transformAsyncBody(a[6].copyNimTree)
   let returnTypeFull = a[3][0]
 
-  let procNameStripped = newIdentNode($(if procName.kind == nnkPostfix: procName[1] else: procName))
+  var procNameStripped: NimNode
+  if procName.kind == nnkPostfix: procNameStripped = newIdentNode($(procName[1]))
+  elif procName.kind == nnkEmpty: procNameStripped = newIdentNode("(anonymous)")
+  else: procNameStripped = newIdentNode($procName)
+
   let procNameStr = newStrLitNode($procNameStripped)
 
   if returnTypeFull.kind != nnkEmpty and (returnTypeFull.kind != nnkBracketExpr or returnTypeFull[0] != newIdentNode("Future")):

@@ -133,10 +133,6 @@ proc `$`*(req: HttpRequest): string =
     headers.add("$1='$2'" % [k, v])
   return "HttpRequest(httpMethod=$1, path=$2, headers={$3})" % [req.httpMethod, req.path, headers.join(", ")]
 
-proc reverse(s: var string) =
-  for i in 0..<(s.len/2).int:
-    swap(s[i], s[s.len - 1 - i])
-
 proc tryParseHexUint64*(val: string): Result[int64] =
   var val = val.strip
   if val.len > 15:
