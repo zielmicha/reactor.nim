@@ -208,6 +208,7 @@ proc connectPubsub*(connectProc: (proc(): Future[BytePipe]), password: string, c
   var pipe: BytePipe = nil
   while true:
     if pipe == nil or pipe.output.isRecvClosed:
+      if pipe != nil: pipe.close
       pipe = await connectProc()
       if password != "":
         await pipe.output.serialize(@["AUTH", password])
@@ -234,14 +235,24 @@ proc pubsub*(client: RedisClient, channels: seq[string]): Input[RedisMessage]=
   return connectPubsub(client.connectProc, client.password, channels)
 
 proc doReconnect(client: RedisClient) {.async.} =
-  let x = await client.connectProc()
+  var x = await client.connectProc()
+
+  defer:
+    if x != nil: x.close
 
   if client.password != "":
     await x.output.serialize(@["AUTH", client.password])
     await x.input.unserialize(void)
 
+  if client.input != nil:
+    client.input.recvClose
+    client.output.sendClose
+
   client.output = x.output
   client.input = x.input
+
+  x = nil # prevent from closing by defer
+
   client.connected = true
   var readersIn: Input[proc():Future[void]]
   (readersIn, client.readers) = newInputOutputPair[proc():Future[void]]()

@@ -169,6 +169,7 @@ proc connectTcpAsHandle(info: TcpConnectionData): Future[ptr uv_stream_t] =
     else:
       state.completer.complete(req.handle)
 
+    freeUvMemory(cast[ptr uv_handle_t](req))
     dealloc(state.sockaddress)
     GC_unref(state)
 

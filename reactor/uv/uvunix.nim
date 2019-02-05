@@ -34,6 +34,7 @@ proc connectUnix*(path: string, allowFdPassing=false): Future[UnixConnection] =
     else:
       state.completer.complete(newUvPipe[UnixConnection](req.handle))
 
+    freeUvMemory(cast[ptr uv_handle_t](req))
     GC_unref(state)
 
   let handle = cast[ptr uv_pipe_t](newUvHandle(UV_NAMED_PIPE))

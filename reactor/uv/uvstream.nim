@@ -65,8 +65,12 @@ proc writeCb(req: ptr uv_write_t, status: cint) {.cdecl.} =
     self.writeReady()
 
 proc freeStream(stream: ptr uv_stream_t) {.cdecl.} =
-  # GC_unref(cast[RootRef](stream.data)) # is RootRef good enough?
+  let self = cast[UvPipe](stream.data)
   assert stream.data != nil
+  self.writeReq.data = nil
+  freeUvMemory(cast[ptr uv_handle_t](self.writeReq))
+  self.writeReq = nil
+  GC_unref(self) # is RootRef good enough?
   stream.data = nil
   freeUvMemory(stream)
 
