@@ -31,7 +31,7 @@ type
   TcpBoundSocket* = ref object
     stream: ptr uv_tcp_t
 
-export UvStream, incomingConnections, acceptAsFd, accept, close
+export incomingConnections, acceptAsFd, accept, close
 
 proc getPeerAddr*(fd: cint): InetAddress =
   ## Get address of a remote peer (similar to POSIX getpeername).

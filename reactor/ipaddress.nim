@@ -138,7 +138,8 @@ proc `$`*(a: IpAddress): string =
   case a.kind:
   of ip4: return $a.ip4
   of ip6: return $a.ip6
-  else: doAssert(false)
+
+  doAssert(false)
 
 proc `$`*[T](a: Interface[T]): string =
   "$1/$2" % [$a.address, $a.mask]

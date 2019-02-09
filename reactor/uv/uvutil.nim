@@ -97,20 +97,20 @@ proc ipaddrToSockaddr*(address: ptr SockAddr, ip: IpAddress, port: int) =
   case ip.kind:
   of ip4:
     let addr4 = cast[ptr SockAddr_in](address)
-    addr4.sin_family = AF_INET
+    addr4.sin_family = type(addr4.sin_family)(AF_INET)
     addr4.sin_port = htons(cast[InPort](port.uint16))
     copyMem(addr4.sin_addr.s_addr.addr, addr ip.ip4, 4)
   of ip6:
     let addr6 = cast[ptr SockAddr_in6](address)
-    addr6.sin6_family = AF_INET6
+    addr6.sin6_family = type(addr6.sin6_family)(AF_INET6)
     addr6.sin6_port = htons(cast[InPort](port.uint16))
     copyMem(addr6.sin6_addr.s6_addr.addr, addr ip.ip6, 16)
 
 proc sockaddrToIpaddr*(address: ptr SockAddr): InetAddress =
-  if address.sa_family == AF_INET:
+  if address.sa_family.cint == AF_INET:
      var a = cast[ptr Sockaddr_in](address)
      return (a.sin_addr.s_addr.ipAddress.from4, htons(a.sin_port).int)
-  elif address.sa_family == AF_INET6:
+  elif address.sa_family.cint == AF_INET6:
     var a = cast[ptr Sockaddr_in6](address)
     let address = a.sin6_addr.s6_addr.ipAddress.from6
     return (address, htons(a.sin6_port).int)
