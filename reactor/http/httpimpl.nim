@@ -102,3 +102,6 @@ proc readWithContentLength*(conn: ByteInput, length: int64): ByteInput =
   let (input, output) = newInputOutputPair[byte]()
   pipeLimited(conn, output, length).onErrorClose(output)
   return input
+
+proc isUpgrade*(headers: HeaderTable): bool =
+  return "upgrade" in headers.getOrDefault("connection", "").toLowerAscii.split(", ")

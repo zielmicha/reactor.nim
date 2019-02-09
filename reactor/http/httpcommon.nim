@@ -41,6 +41,9 @@ proc `[]`*(self: HeaderTable, key: string): string =
 proc `[]=`*(self: var HeaderTable, key: string, value: string) =
   self.headers[key.strip.toLowerAscii] = value.strip
 
+proc `$`*(self: HeaderTable): string =
+  $(self.headers)
+
 proc getOrDefault*(self: HeaderTable, key: string, defaultVal: string=""): string =
   var key = key.strip.toLowerAscii
   if key notin self.headers:

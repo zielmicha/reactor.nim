@@ -6,7 +6,7 @@ proc writeHeaders*(conn: ByteOutput, response: HttpResponse): Future[void] {.asy
   await conn.write(makeHeaders(response.headers))
 
 proc writeResponse*(conn: ByteOutput, response: HttpResponse, close=false): Future[void] {.async.} =
-  if response.headers.getOrDefault("connection").toLowerAscii == "upgrade":
+  if isUpgrade(response.headers):
     await conn.writeHeaders(response)
     await pipe(response.dataInput, conn)
     conn.sendClose
@@ -53,7 +53,7 @@ proc readRequest*(conn: ByteInput): Future[HttpRequest] {.async.} =
 
     let length = parseBiggestInt(req.headers["content-length"])
     req.data = some(conn.readWithContentLength(length))
-  elif req.headers.getOrDefault("connection", "").toLowerAscii == "upgrade":
+  elif isUpgrade(req.headers):
     req.data = some(conn)
 
   return req

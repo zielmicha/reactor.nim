@@ -45,8 +45,8 @@ proc sendRequest*(conn: HttpConnection, request: HttpRequest, closeConnection=fa
     if "content-length" in request.headers:
       let length = request.headers["content-length"]
       await pipeLimited(request.data.get, conn.conn.output, limit=parseBiggestInt(length), close=false)
-    elif request.headers.getOrDefault("connection", "") == "upgrade":
-      await pipe(request.data.get, conn.conn.output)
+    elif isUpgrade(request.headers):
+      pipe(request.data.get, conn.conn.output).onFinishClose(conn.conn.output)
     else:
       request.headers["transfer-encoding"] = "chunked"
       await pipeChunked(request.data.get, conn.conn.output)

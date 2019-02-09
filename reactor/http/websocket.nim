@@ -4,7 +4,7 @@ import reactor/http/httpcommon, reactor/http/httpimpl
 const messageLengthLimit = 10_000_000
 
 proc websocketServerHandshake(r: HttpRequest): HttpResponse =
-  if r.headers.getOrDefault("connection").toLowerAscii != "upgrade":
+  if "upgrade" notin r.headers.getOrDefault("connection").toLowerAscii.split(", "):
     return newHttpResponse("expected websocket upgrade", statusCode=400)
 
   let upgrades = r.headers.getOrDefault("Upgrade").split(", ")
@@ -175,6 +175,9 @@ proc websocketServerCallback*(cb: (proc(r: HttpRequest, conn: WebsocketConnectio
   return
     proc(r: HttpRequest): Future[HttpResponse] {.async.} =
       let (resp, conn) = websocketServer(r)
+      if conn == nil:
+        return resp
+
       cb(r, conn).onSuccessOrError(
         proc(r: Result[void]) =
           conn.close
