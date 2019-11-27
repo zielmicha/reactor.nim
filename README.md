@@ -1,5 +1,7 @@
 # reactor.nim
 
+**Warning**: this project is currently unmaintained!
+
 [![Build Status](https://travis-ci.org/zielmicha/reactor.nim.svg?branch=master)](https://travis-ci.org/zielmicha/reactor.nim)
 
 *reactor.nim* is an asynchronous networking engine for Nim. It's based on libuv and provides future-based API. For more, see [documentation](https://networkos.net/nim/reactor.nim/doc/).
